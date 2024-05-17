@@ -1,0 +1,25 @@
+[package]
+name = "exif-sorter"
+version = "0.1.0"
+edition = "2021"
+authors = ["Stürmer, Benjamin <benjamin@stuermer.pro>"]
+categories = ["command-line-utilities", "filesystem"]
+keywords = ["cli", "filesystem", "exif", "image"]
+license = "agpl-3.0"
+description = "A simple tool to sort images into sub-directories based on their exif data."
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chrono = "0.4.38"
+clap = { version = "4.5.4", features = ["derive", "wrap_help", "help"] }
+kamadak-exif = "0.5.5"
+tokio = { version = "1.37.0", features = ["rt-multi-thread", "full"] }
+anyhow = "1.0"
+thiserror = "1.0.60"
+colored = "2.1.0"
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "2"
+temp-dir = "0.1"
