@@ -23,7 +23,7 @@ fn should_die_with_non_existing_source_directory() {
 }
 
 #[test]
-fn should_die_with_lack_of_permissions_for_source_directory() {
+fn should_skip_directories_with_lack_of_permissions_for_source_directory() {
     // create a test directory
     let testdir = temp_dir::TempDir::new().unwrap();
     let testpath = testdir.path();
@@ -39,8 +39,8 @@ fn should_die_with_lack_of_permissions_for_source_directory() {
     cmd.arg("-s")
         .arg(testpath)
         .assert()
-        .failure()
-        .stderr(predicate::str::contains("Could not read path"));
+        .success()
+        .stdout(predicate::str::contains("Permission denied"));
 }
 
 #[test]
@@ -59,10 +59,9 @@ fn should_skip_file_without_exif_information_available() {
         .assert()
         .success()
         .stdout(predicate::str::contains("testfile"))
-        .stdout(predicate::str::contains(
-            "No image or invalid image format!",
-        ));
+        .stdout(predicate::str::contains("No exif information!"));
 }
 
 // TODO: add test for dry-run
 // TODO: add test for file moved
+// TODO: add test for duplicate file (same filename only)
