@@ -76,7 +76,8 @@ fn parse_dir(dry_run: bool, dir: &Path, cb: &dyn Fn(DirEntry) -> Result<String>)
             Ok(read_dir) => {
                 for entry in read_dir {
                     let entry = entry?;
-                    let filename = &entry.file_name().into_string().unwrap();
+                    let target_name = &entry.file_name().into_string().unwrap();
+                    let source_name = format!("{}/{}", dir.to_str().unwrap_or("."), target_name);
                     let path = entry.path();
                     if path.is_dir() {
                         parse_dir(dry_run, &path, cb)?;
@@ -85,19 +86,35 @@ fn parse_dir(dry_run: bool, dir: &Path, cb: &dyn Fn(DirEntry) -> Result<String>)
                         match result {
                             Ok(result) => {
                                 if dry_run.not() {
-                                    move_file_to_dir(filename, path.as_path(), result.as_str());
+                                    move_file_to_dir(
+                                        dir.to_str().unwrap_or("."),
+                                        result.as_str(),
+                                        target_name,
+                                        path.as_path(),
+                                    );
                                 } else {
-                                    println!("{:<35} {}/{filename}", filename, result.green())
+                                    println!(
+                                        "{:<100} {}/{}",
+                                        source_name,
+                                        result.green(),
+                                        target_name
+                                    )
                                 }
                             }
-                            Err(e) => println!("{:<35} {}", filename, e),
+                            Err(e) => {
+                                println!(
+                                    "{:<100} {}",
+                                    source_name,
+                                    e.to_string().truecolor(128, 128, 128)
+                                )
+                            }
                         }
                     }
                 }
             }
             Err(e) => {
                 println!(
-                    "{:<35} {}",
+                    "{:<100} {}",
                     dir.to_str().unwrap().to_string().red(),
                     e.to_string().red()
                 )
@@ -152,8 +169,8 @@ fn parse_date_from_exif(exif: Exif) -> Result<String> {
 /// Move the given file into the given directory
 ///
 /// creating the directory if it does not exist yet.
-fn move_file_to_dir(filename: &str, _path: &Path, dir: &str) {
+fn move_file_to_dir(source_dir: &str, target_dir: &str, filename: &str, _path: &Path) {
     // TODO: move file if no duplicate
     // TODO: check for target_dir from args
-    println!("{:<35} {}/{filename}", filename, dir.red())
+    println!("{:<100} {}/{}", source_dir, target_dir.red(), filename)
 }
