@@ -1,11 +1,15 @@
+use chrono::NaiveDate;
+
+use super::AppError;
+
 pub struct Image {
-    source_path: &str,
-    source_filename: &str,
-    source_filetype: &str,
+    source_path: String,
+    source_filename: String,
+    source_filetype: String,
     dates: ImageDates,
-    target_path: &str,
-    target_filename: &str,
-    target_filetype: &str,
+    target_path: String,
+    target_filename: String,
+    target_filetype: String,
     error: Option<AppError>,
 }
 

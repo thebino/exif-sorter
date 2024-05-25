@@ -25,7 +25,7 @@ pub enum AppError {
 }
 
 /// read entries from given directory recursively
-fn parse_dir(dry_run: bool, dir: &Path, cb: &dyn Fn(DirEntry) -> Result<String>) -> Result<()> {
+pub fn parse_dir(dry_run: bool, dir: &Path, cb: &dyn Fn(DirEntry) -> Result<String>) -> Result<()> {
     if dir.is_dir() {
         match fs::read_dir(dir) {
             Ok(read_dir) => {
@@ -79,18 +79,18 @@ fn parse_dir(dry_run: bool, dir: &Path, cb: &dyn Fn(DirEntry) -> Result<String>)
     Ok(())
 }
 
-// /// check for exif metadata and move file
-// fn handle_file(entry: DirEntry) -> Result<String> {
-//     let file = std::fs::File::open(entry.path())?;
+/// check for exif metadata and move file
+pub fn handle_file(entry: DirEntry) -> Result<String> {
+    let file = std::fs::File::open(entry.path())?;
 
-//     let exif = read_exif(file);
-//     match exif {
-//         Ok(exif) => parse_date_from_exif(exif),
-//         Err(_) => {
-//             bail!(AppError::NoExifInformation())
-//         }
-//     }
-// }
+    let exif = read_exif(file);
+    match exif {
+        Ok(exif) => parse_date_from_exif(exif),
+        Err(_) => {
+            bail!(AppError::NoExifInformation())
+        }
+    }
+}
 
 /// read file metadata and check for exif information
 fn read_exif(file: File) -> Result<Exif, exif::Error> {
@@ -99,27 +99,27 @@ fn read_exif(file: File) -> Result<Exif, exif::Error> {
     exifreader.read_from_container(&mut bufreader)
 }
 
-/// parse the `DateTimeOriginal` field from Exif as date string
-// fn parse_date_from_exif(exif: Exif) -> Result<String> {
-//     let date = exif.get_field(Tag::DateTimeOriginal, In::PRIMARY);
-//     match date {
-//         Some(date) => {
-//             let date_str = date.display_value().to_string();
+// parse the `DateTimeOriginal` field from Exif as date string
+pub fn parse_date_from_exif(exif: Exif) -> Result<String> {
+    let date = exif.get_field(Tag::DateTimeOriginal, In::PRIMARY);
+    match date {
+        Some(date) => {
+            let date_str = date.display_value().to_string();
 
-//             let datetime = chrono::NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%d %H:%M:%S");
+            let datetime = chrono::NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%d %H:%M:%S");
 
-//             match datetime {
-//                 Ok(datetime) => Ok(format!("{}", datetime.date())),
-//                 Err(e) => {
-//                     bail!(AppError::DateTimeParsingEror(e))
-//                 }
-//             }
-//         }
-//         None => {
-//             bail!(AppError::NoDateTimeOriginalFound())
-//         }
-//     }
-// }
+            match datetime {
+                Ok(datetime) => Ok(format!("{}", datetime.date())),
+                Err(e) => {
+                    bail!(AppError::DateTimeParsingEror(e))
+                }
+            }
+        }
+        None => {
+            bail!(AppError::NoDateTimeOriginalFound())
+        }
+    }
+}
 
 /// Move the given file into the given directory
 ///

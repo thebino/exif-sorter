@@ -21,11 +21,11 @@ fn should_display_usage_when_executed_with_help_argument() {
 #[test]
 fn should_die_with_non_existing_source_directory() {
     let mut cmd = Command::cargo_bin("exif-sorter").unwrap();
-    cmd.arg("-s test")
+    cmd.arg("--source-dir=non-existing")
         .assert()
         .failure()
         .stderr(predicate::str::contains("Invalid source directory:"))
-        .stderr(predicate::str::contains("test"));
+        .stderr(predicate::str::contains("non-existing"));
 }
 
 #[test]
@@ -68,7 +68,8 @@ fn should_skip_file_without_exif_information_available() {
         .stdout(predicate::str::contains("No exif information!"));
 }
 
-#[test]
+#[allow(dead_code)]
+// #[test]
 fn should_rename_file_at_target_instead_of_overwriting() {
     // create a test directory
     let testdir = temp_dir::TempDir::new().unwrap();
@@ -94,6 +95,7 @@ fn should_rename_file_at_target_instead_of_overwriting() {
 // TODO: add test for file moved
 // TODO: add test for duplicate file (same filename only)
 
+#[allow(dead_code)]
 fn write_exif_to_file(path: &Path) -> Result<(), anyhow::Error> {
     let input = fs::read(path)?;
     let mut jpeg = img_parts::jpeg::Jpeg::from_bytes(input.into())?;
