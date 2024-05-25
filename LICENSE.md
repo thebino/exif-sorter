@@ -629,8 +629,8 @@ to attach them to the start of each source file to most effectively
 state the exclusion of warranty; and each file should have at least
 the "copyright" line and a pointer to where the full notice is found.
 
-    Photos.network · A privacy first, self-hosted photo storage and sharing service for fediverse.
-    Copyright 2020 Photos network developers
+    exif-sorter · A simple tool to sort images into sub-directories based on their exif 'DateTimeOriginal'.
+    Copyright 2024 Stürmer, Benjamin
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by

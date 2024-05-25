@@ -1,7 +1,7 @@
 # Exif-tool
 
 [![License](https://img.shields.io/github/license/thebino/exif-sorter?style=for-the-badge)](./LICENSE.md)
-[![GitHub contributors](https://img.shields.io/github/contributors/thebino/exif-sorter?color=success&style=for-the-badge)](https://github.com/photos-network/core/graphs/contributors)
+[![GitHub contributors](https://img.shields.io/github/contributors/thebino/exif-sorter?color=success&style=for-the-badge)](https://github.com/thebino/exif-sorter/graphs/contributors)
 ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/thebino/exif-sorter/ci.yaml?style=for-the-badge)
 
 
