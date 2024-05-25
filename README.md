@@ -17,6 +17,10 @@ A simple tool to read the exif data from images and sort them into sub-directori
 > * CLI: separate search and process into lib
 > * CLI: re-use Image from lib instead of ImageFile in app state
 
+<img src="tui.png"/>
+
+<img src="cli.png"/>
+
 ## Cross compile via Docker
 ```shell
 CROSS_CONTAINER_OPTS="--platform linux/amd64" cross build --target x86_64-unknown-linux-gnu
