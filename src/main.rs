@@ -18,7 +18,7 @@ async fn main() {
     let args = Args::parse();
 
     if args.command.is_some() {
-        if let Err(e) = tui::run_tui().await {
+        if let Err(e) = tui::run_tui(args.source_dir, args.target_dir).await {
             eprintln!("Error running TUI: {}", e);
             std::process::exit(1);
         }

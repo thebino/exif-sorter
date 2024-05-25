@@ -1,4 +1,4 @@
-use crossterm::event::{self, Event, KeyCode};
+use crossterm::event::{self, Event, KeyCode, KeyEvent};
 use crossterm::{
     event::KeyEventKind,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -13,7 +13,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::block::Title;
 use ratatui::widgets::{
-    BorderType, Clear, Gauge, ListState, Padding, Paragraph, StatefulWidget, Widget,
+    BorderType, Clear, Gauge, ListState, Padding, Paragraph, StatefulWidget, TableState, Widget,
 };
 use ratatui::{
     backend::CrosstermBackend,
@@ -26,144 +26,135 @@ use std::net::Ipv4Addr;
 use std::path::Path;
 use std::{env, io};
 
-// #[derive(Default)]
+use super::{events, ui};
+
+pub struct ImageFile {
+    pub(crate) source: String,
+    pub(crate) target: String,
+    pub(crate) moved: bool,
+}
+
+/// Application state
 pub struct App {
-    items: StatefulList,
+    /// exit the tui when true
+    should_exit: bool,
+    pub(crate) progress: Option<f64>,
+    pub(crate) source_dir: String,
+    pub(crate) target_dir: String,
+    pub(crate) items: StatefulList,
 }
 
 pub struct StatefulList {
-    state: ListState,
-    // items: Vec<ReleaseItem<'a>>,
-    last_selected: Option<usize>,
-    in_progress: Option<usize>,
+    pub(crate) state: TableState,
+    pub items: Vec<ImageFile>,
+    pub(crate) last_selected: Option<usize>,
 }
 
-impl<'a> App {
-    pub fn new() -> Self {
+impl App {
+    /// initialize the application state
+    pub fn new(source_dir: String, target_dir: String) -> Self {
         Self {
+            should_exit: false,
+            progress: None,
+            source_dir,
+            target_dir,
             items: StatefulList {
-                state: ListState::default(),
-                // items: releases.iter().map(ReleaseItem::from).collect(),
+                state: TableState::default(),
+                items: vec![],
                 last_selected: None,
-                in_progress: None,
             },
         }
     }
 
-    fn go_top(&mut self) {
-        self.items.state.select(Some(0));
-    }
+    /// draw the ui and handle events
+    pub fn run(&mut self, mut terminal: Terminal<impl Backend>) -> Result<()> {
+        while !self.should_exit {
+            terminal.draw(|frame| ui::draw(frame, self))?;
 
-    fn go_bottom(&mut self) {
-        // self.items.state.select(Some(self.items.items.len() - 1));
-    }
-}
-
-impl Widget for &mut App {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        let outer_layout = Layout::vertical([Constraint::Percentage(90), Constraint::Fill(2)]);
-        let [top_area, actions_area] = outer_layout.areas(area);
-
-        let inner_layout =
-            Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(70)]);
-        let [releases_area, info_area] = inner_layout.areas(top_area);
-
-        // self.render_releases(releases_area, buf);
-        // self.render_info(info_area, buf);
-        self.render_actions(actions_area, buf);
-
-        // if self.items.in_progress.is_some() {
-        // self.render_popup(top_area, buf);
-        // }
-        Paragraph::new("This is a sample".to_string())
-            .block(Block::new().borders(Borders::ALL))
-            .bold()
-            .render(area, buf);
-    }
-}
-
-impl App {
-    pub async fn run(&mut self, mut terminal: Terminal<impl Backend>) -> io::Result<()> {
-        loop {
-            self.draw(&mut terminal)?;
-
-            if let Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press {
-                    use KeyCode::*;
-                    match key.code {
-                        Char('q') | Esc => return Ok(()),
-                        // Char('h') | Left => self.items.unselect(),
-                        // Char('j') | Down => self.items.next(),
-                        // Char('k') | Up => self.items.previous(),
-                        // Char('l') | Right | Enter => self.flip_status(),
-                        Char('g') => self.go_top(),
-                        Char('G') => self.go_bottom(),
-                        _ => {}
-                    }
-                }
-            }
+            events::handle_events(self)?;
         }
-    }
-
-    fn draw(&mut self, terminal: &mut Terminal<impl Backend>) -> io::Result<()> {
-        terminal.draw(|f| f.render_widget(self, f.size()))?;
         Ok(())
     }
 
-    fn render_actions(&mut self, area: Rect, buf: &mut Buffer) {
-        // actions
-        let actions: Line = vec![
-            Span::styled("↓↑".to_string(), Style::default().fg(Color::LightBlue)),
-            " to move ".into(),
-            Span::styled("←".to_string(), Style::default().fg(Color::LightBlue)),
-            " to unselect ".into(),
-            Span::styled("→".to_string(), Style::default().fg(Color::LightBlue)),
-            " to change status ".into(),
-            Span::styled("g/G".to_string(), Style::default().fg(Color::LightBlue)),
-            " to go to top/bottom ".into(),
-            Span::styled("q".to_string(), Style::default().fg(Color::LightBlue)),
-            " to quit ".into(),
-        ]
-        .into();
+    /// Handle events like key presses
+    pub(crate) fn handle_event(&mut self, event: KeyEvent) {
+        match event.code {
+            KeyCode::Char('q') | KeyCode::Esc => self.should_exit = true,
+            KeyCode::Char('j') | KeyCode::Down => self.items.next(),
+            KeyCode::Char('k') | KeyCode::Up => self.items.previous(),
+            KeyCode::Char('s') => self.scan_source(),
+            KeyCode::Char('p') => self.process_all(),
+            KeyCode::Char('P') => self.process_selected(),
+            _ => {}
+        }
+    }
 
-        Paragraph::new(actions)
-            .block(
-                Block::new()
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded),
-            )
-            .centered()
-            .render(area, buf);
+    fn scan_source(&mut self) {
+        // TODO: scan source directory
+        if (self.progress.is_some()) {
+            self.progress = None;
+        } else {
+            self.progress = Some(10f64);
+            self.items.items = vec![
+                    ///
+                    ImageFile {
+                    source: "/tmp/images/DSC_1234.NEF".to_string(),
+                    target: "/tmp/images/sorted/2024-01-01/DSC_1234.NEF".to_string(),
+                    moved: true,
+                },
+                    ImageFile {
+                    source: "/tmp/images/DSC_1235.NEF".to_string(),
+                    target: "/tmp/images/sorted/2024-01-01/DSC_1235.NEF".to_string(),
+                    moved: true,
+                },
+                    ImageFile {
+                    source: "/tmp/images/DSC_1236.NEF".to_string(),
+                    target: "/tmp/images/sorted/2024-01-02/DSC_1236.NEF".to_string(),
+                    moved: true,
+                },
+            //
+            ]
+        }
+    }
+
+    fn process_all(&mut self) {
+        // TODO: process ALL
+    }
+
+    fn process_selected(&mut self) {
+        if let Some(i) = self.items.state.selected() {
+            // TODO: process selected only
+        }
     }
 }
 
 impl StatefulList {
     fn next(&mut self) {
-        // let i = match self.state.selected() {
-        //     Some(i) => {
-        //         if i >= self.items.len() - 1 {
-        //             0
-        //         } else {
-        //             i + 1
-        //         }
-        //     }
-        //     None => self.last_selected.unwrap_or(0),
-        // };
-        // self.state.select(Some(i));
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i >= self.items.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => self.last_selected.unwrap_or(0),
+        };
+        self.state.select(Some(i));
     }
 
     fn previous(&mut self) {
-        // let i = match self.state.selected() {
-        //     Some(i) => {
-        //         if i == 0 {
-        //             self.items.len() - 1
-        //         } else {
-        //             i - 1
-        //         }
-        //     }
-        //     None => self.last_selected.unwrap_or(0),
-        // };
-        // self.state.select(Some(i));
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.items.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => self.last_selected.unwrap_or(0),
+        };
+        self.state.select(Some(i));
     }
 
     fn unselect(&mut self) {

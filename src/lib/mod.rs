@@ -1,5 +1,5 @@
 #![allow(unused)]
-pub mod tui;
+pub mod image;
 
 use anyhow::{bail, Result};
 use chrono::ParseError;

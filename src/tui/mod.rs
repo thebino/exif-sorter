@@ -17,13 +17,14 @@ use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::Frame;
 
 mod app;
-
+mod events;
+mod ui;
 use app::App;
 
-pub async fn run_tui() -> Result<()> {
+pub async fn run_tui(source_dir: String, target_dir: String) -> Result<()> {
     let terminal = init()?;
 
-    App::new().run(terminal).await?;
+    App::new(source_dir, target_dir).run(terminal);
 
     restore();
     Ok(())
