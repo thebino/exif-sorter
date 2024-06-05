@@ -2,19 +2,21 @@ use chrono::NaiveDate;
 
 use super::AppError;
 
+#[derive(Default)]
 pub struct Image {
-    source_path: String,
-    source_filename: String,
-    source_filetype: String,
-    dates: ImageDates,
-    target_path: String,
-    target_filename: String,
-    target_filetype: String,
-    error: Option<AppError>,
+    pub source_path: String,
+    pub source_filename: String,
+    pub source_filetype: String,
+    pub dates: Dates,
+    pub target_path: String,
+    pub target_filename: String,
+    pub target_filetype: String,
+    pub error: Option<AppError>,
 }
 
-pub struct ImageDates {
-    exif_date_time_original: Option<NaiveDate>,
-    file_creation_date: NaiveDate,
-    file_modified_date: NaiveDate,
+#[derive(Default)]
+pub struct Dates {
+    pub exif_date_time_original: Option<NaiveDate>,
+    pub file_creation_date: NaiveDate,
+    pub file_modified_date: NaiveDate,
 }

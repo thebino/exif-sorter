@@ -24,6 +24,20 @@ pub enum AppError {
     IntermittentIO(),
 }
 
+/// walk through given directory, read all images files and move the files regarding its exif date afterwards.
+pub fn parse_and_move(
+    dry_run: bool,
+    dir: &Path,
+    cb: &dyn Fn(DirEntry) -> Result<String>,
+) -> Result<()> {
+    // TODO: walk through dir
+    // TODO: read exif dates
+    // TODO: search for duplicates
+    // TODO: move if dry_run is not set
+    // TODO: print output
+    parse_dir(dry_run, dir, cb)
+}
+
 /// read entries from given directory recursively
 pub fn parse_dir(dry_run: bool, dir: &Path, cb: &dyn Fn(DirEntry) -> Result<String>) -> Result<()> {
     if dir.is_dir() {

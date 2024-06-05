@@ -135,7 +135,7 @@ fn render_content(app: &App, area: Rect, frame: &mut Frame) {
             //     //     .height(4)
 
             Row::new(vec![
-                Cell::from(data.source.to_string()),
+                Cell::from(data.source_path.to_string()),
                 Cell::from(Line::from(vec![
                     "/tmp/images/sorted/".into(),
                     Span::styled("2024-01-01/".to_string(), Style::default().fg(Color::Green)),
