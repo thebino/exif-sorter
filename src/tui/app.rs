@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use crossterm::event::{self, Event, KeyCode, KeyEvent};
 use crossterm::{
     event::KeyEventKind,
@@ -26,13 +27,15 @@ use std::net::Ipv4Addr;
 use std::path::Path;
 use std::{env, io};
 
+use crate::sorter::image::{Dates, Image};
+
 use super::{events, ui};
 
-pub struct ImageFile {
-    pub(crate) source: String,
-    pub(crate) target: String,
-    pub(crate) moved: bool,
-}
+// pub struct ImageFile {
+//     pub(crate) source: String,
+//     pub(crate) target: String,
+//     pub(crate) moved: bool,
+// }
 
 /// Application state
 pub struct App {
@@ -46,7 +49,7 @@ pub struct App {
 
 pub struct StatefulList {
     pub(crate) state: TableState,
-    pub items: Vec<ImageFile>,
+    pub items: Vec<Image>,
     pub(crate) last_selected: Option<usize>,
 }
 
@@ -96,23 +99,46 @@ impl App {
         } else {
             self.progress = Some(10f64);
             self.items.items = vec![
-                    ///
-                    ImageFile {
-                    source: "/tmp/images/DSC_1234.NEF".to_string(),
-                    target: "/tmp/images/sorted/2024-01-01/DSC_1234.NEF".to_string(),
-                    moved: true,
+                ///
+                Image {
+                    source_path: "/tmp/images/".to_string(),
+                    source_filename: "DSC_1234".to_string(),
+                    source_filetype: "NEF".to_string(),
+                    dates: Dates {
+                        exif_date_time_original: None,
+                        file_creation_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+                        file_modified_date: todo!() },
+                    target_path: "/tmp/images/sorted/2024-01-01".to_string(),
+                    target_filename: "DSC_1234".to_string(),
+                    target_filetype: "NEF".to_string(),
+                    error: None,
                 },
-                    ImageFile {
-                    source: "/tmp/images/DSC_1235.NEF".to_string(),
-                    target: "/tmp/images/sorted/2024-01-01/DSC_1235.NEF".to_string(),
-                    moved: true,
+                Image {
+                    source_path: "/tmp/images/".to_string(),
+                    source_filename: "DSC_1235".to_string(),
+                    source_filetype: "NEF".to_string(),
+                    dates: Dates {
+                        exif_date_time_original: None,
+                        file_creation_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+                        file_modified_date: todo!() },
+                    target_path: "/tmp/images/sorted/2024-01-01".to_string(),
+                    target_filename: "DSC_1235".to_string(),
+                    target_filetype: "NEF".to_string(),
+                    error: None,
                 },
-                    ImageFile {
-                    source: "/tmp/images/DSC_1236.NEF".to_string(),
-                    target: "/tmp/images/sorted/2024-01-02/DSC_1236.NEF".to_string(),
-                    moved: true,
+                Image {
+                    source_path: "/tmp/images/".to_string(),
+                    source_filename: "DSC_1236".to_string(),
+                    source_filetype: "NEF".to_string(),
+                    dates: Dates {
+                        exif_date_time_original: None,
+                        file_creation_date: NaiveDate::from_ymd_opt(2024, 1, 2).unwrap(),
+                        file_modified_date: todo!() },
+                    target_path: "/tmp/images/sorted/2024-01-02".to_string(),
+                    target_filename: "DSC_1236".to_string(),
+                    target_filetype: "NEF".to_string(),
+                    error: None,
                 },
-            //
             ]
         }
     }

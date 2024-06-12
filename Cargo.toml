@@ -6,16 +6,28 @@ authors = ["Stürmer, Benjamin <benjamin@stuermer.pro>"]
 categories = ["command-line-utilities", "filesystem"]
 keywords = ["cli", "filesystem", "exif", "image"]
 license = "agpl-3.0"
-description = "A simple tool to sort images into sub-directories based on their exif 'DateTimeOriginal'."
+description = "A simple tool to sort images into sub-directories based on their exif data."
 
 [dependencies]
-chrono = "0.4.38"
-clap = { version = "4.5.4", features = ["derive", "wrap_help", "help"] }
-kamadak-exif = "0.5.5"
-tokio = { version = "1.37.0", features = ["rt-multi-thread", "full"] }
+# general
 anyhow = "1.0"
 thiserror = "1.0.60"
+
+# walk through directory
+walkdir = "2"
+# read exif data
+kamadak-exif = "0.5.5"
+# date handling
+chrono = "0.4.38"
+# random number for unique filenames
+rand = "0.8.5"
+
+tokio = { version = "1.37.0", features = ["rt-multi-thread", "full"] }
+# cli
+clap = { version = "4.5.4", features = ["derive", "wrap_help", "help"] }
 colored = "2.1.0"
+
+# tui
 ratatui = "0.26.3"
 crossterm = "0.27.0"
 
