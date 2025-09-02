@@ -1,7 +1,7 @@
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::{self, KeyEventKind};
 
 use super::app::App;
-use std::io::{stdout, Result};
+use std::io::Result;
 
 pub fn handle_events(app: &mut App) -> Result<()> {
     if event::poll(std::time::Duration::from_millis(16))? {

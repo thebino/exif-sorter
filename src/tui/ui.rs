@@ -1,33 +1,16 @@
 use crate::tui::app::App;
-use crossterm::event::{self, Event, KeyCode};
-use crossterm::{
-    event::KeyEventKind,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-    ExecutableCommand,
-};
 use ratatui::backend::Backend;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
-use ratatui::prelude::{Stylize, Terminal};
-use ratatui::style::palette::tailwind;
+use ratatui::prelude::Stylize;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::block::Title;
+use ratatui::widgets::{Block, Borders};
 use ratatui::widgets::{
-    BorderType, Cell, Clear, Gauge, HighlightSpacing, ListState, Padding, Paragraph, Row,
-    StatefulWidget, Table, Widget,
+    BorderType, Cell, Clear, Gauge, HighlightSpacing, Paragraph, Row, Table, Widget,
 };
 use ratatui::Frame;
-use ratatui::{
-    backend::CrosstermBackend,
-    widgets::{Block, Borders, List, ListItem},
-};
-
-use std::fs::File;
-use std::io::{stdout, Result};
-use std::net::Ipv4Addr;
-use std::path::Path;
-use std::{env, io};
 
 pub fn draw(frame: &mut Frame, app: &App) {
     let size: Rect = frame.size();
@@ -63,7 +46,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
     render_content(app, content_area, frame);
     render_actions(actions_area, frame.buffer_mut());
 
-    if (app.progress.is_some()) {
+    if app.progress.is_some() {
         render_popup(app, content_area, frame);
     }
 }
@@ -135,7 +118,7 @@ fn render_content(app: &App, area: Rect, frame: &mut Frame) {
             //     //     .height(4)
 
             Row::new(vec![
-                Cell::from(data.source_path.to_string()),
+                Cell::from(format!("{}", data.source_path.display())),
                 Cell::from(Line::from(vec![
                     "/tmp/images/sorted/".into(),
                     Span::styled("2024-01-01/".to_string(), Style::default().fg(Color::Green)),
