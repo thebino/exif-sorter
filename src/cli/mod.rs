@@ -16,7 +16,7 @@ pub mod commands;
 
 pub fn run_cli(args: Args) -> Result<()> {
     match Path::new(&args.source_dir).exists() {
-        true => sorter::parse_dir(
+        true => sorter::parse_and_move(
             args.dry_run,
             Path::new(&args.source_dir),
             &sorter::handle_file,
