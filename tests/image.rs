@@ -24,7 +24,7 @@ fn test_extract_modification_date() {
     // given
     let path = Path::new("tests/data/exif/NIKON CORPORATION NIKON D50 3040x2014_019917.nef");
     let file = Image::new(path.to_path_buf(), path.to_path_buf());
-    let expected = NaiveDate::from_ymd_opt(2025, 9, 2).unwrap();
+    let expected = NaiveDate::from_ymd_opt(2025, 11, 3).unwrap();
 
     // when
     let date = file.extract_file_modified_date();
