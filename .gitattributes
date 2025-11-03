@@ -1,0 +1,14 @@
+tests/data/exif/DSC09903.ARW filter=lfs diff=lfs merge=lfs -text
+tests/data/exif/Google[[:space:]]Pixel[[:space:]]5[[:space:]]2016x1512_000253.dng filter=lfs diff=lfs merge=lfs -text
+tests/data/exif/NIKON[[:space:]]CORPORATION[[:space:]]NIKON[[:space:]]D800[[:space:]]4912x7360_000161.dng filter=lfs diff=lfs merge=lfs -text
+tests/data/exif/R0010002.JPG filter=lfs diff=lfs merge=lfs -text
+tests/data/exif/RICOH_GR2.DNG filter=lfs diff=lfs merge=lfs -text
+tests/data/exif/Hasselblad-x1d-II.fff filter=lfs diff=lfs merge=lfs -text
+tests/data/exif/NIKON[[:space:]]CORPORATION[[:space:]]NIKON[[:space:]]D50[[:space:]]3040x2014_019917.nef filter=lfs diff=lfs merge=lfs -text
+tests/data/exif/NIKON[[:space:]]CORPORATION[[:space:]]NIKON[[:space:]]D300[[:space:]]4352x2868_055006.nef filter=lfs diff=lfs merge=lfs -text
+tests/data/exif/NIKON[[:space:]]CORPORATION[[:space:]]NIKON[[:space:]]D5100[[:space:]]4992x3280_058129.nef filter=lfs diff=lfs merge=lfs -text
+tests/data/exif/NIKON[[:space:]]CORPORATION[[:space:]]NIKON[[:space:]]Z[[:space:]]7[[:space:]]8288x5520_002000.nef filter=lfs diff=lfs merge=lfs -text
+tests/data/exif/SONY[[:space:]]ILCE-6000[[:space:]]6048x4024_012003.arw filter=lfs diff=lfs merge=lfs -text
+tests/data/exif/Canon[[:space:]]EOS[[:space:]]5D[[:space:]]Mark[[:space:]]II[[:space:]]5616x3744_000014.cr2 filter=lfs diff=lfs merge=lfs -text
+tests/data/exif/Canon[[:space:]]EOS[[:space:]]5D[[:space:]]Mark[[:space:]]III[[:space:]]5760x3840_000915.cr2 filter=lfs diff=lfs merge=lfs -text
+tests/data/exif/Canon[[:space:]]EOS[[:space:]]7D[[:space:]]5184x3456_000673.cr2 filter=lfs diff=lfs merge=lfs -text

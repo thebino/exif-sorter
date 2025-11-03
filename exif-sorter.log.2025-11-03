@@ -1,0 +1,31 @@
+2025-11-03T04:45:19.733827Z DEBUG Logging initialized
+2025-11-03T04:45:19.733829Z DEBUG Logging initialized
+2025-11-03T04:45:19.733829Z DEBUG Logging initialized
+2025-11-03T04:45:19.733828Z DEBUG Logging initialized
+2025-11-03T04:45:19.733841Z DEBUG Logging initialized
+2025-11-03T04:45:19.737145Z DEBUG opened gitignore file: /Users/stuermer/.gitignore_global
+2025-11-03T04:45:19.737152Z DEBUG opened gitignore file: /Users/stuermer/.gitignore_global
+2025-11-03T04:45:19.737212Z DEBUG glob `Glob("**/*~")` converted to regex: `"(?-u)^(?:/?|.*/)[^/]*\\~$"`
+2025-11-03T04:45:19.737213Z DEBUG glob `Glob("**/*~")` converted to regex: `"(?-u)^(?:/?|.*/)[^/]*\\~$"`
+2025-11-03T04:45:19.737239Z DEBUG built glob set; 0 literals, 6 basenames, 1 extensions, 0 prefixes, 0 suffixes, 0 required extensions, 1 regexes
+2025-11-03T04:45:19.737240Z DEBUG built glob set; 0 literals, 6 basenames, 1 extensions, 0 prefixes, 0 suffixes, 0 required extensions, 1 regexes
+2025-11-03T04:45:19.737749Z DEBUG opened gitignore file: /Users/stuermer/workspace/thebino/exif-sorter/.gitignore
+2025-11-03T04:45:19.737750Z DEBUG opened gitignore file: /Users/stuermer/workspace/thebino/exif-sorter/.gitignore
+2025-11-03T04:45:19.737779Z DEBUG glob `Glob("**/*.log*")` converted to regex: `"(?-u)^(?:/?|.*/)[^/]*\\.log[^/]*$"`
+2025-11-03T04:45:19.737778Z DEBUG glob `Glob("**/*.log*")` converted to regex: `"(?-u)^(?:/?|.*/)[^/]*\\.log[^/]*$"`
+2025-11-03T04:45:19.737786Z DEBUG built glob set; 1 literals, 0 basenames, 0 extensions, 0 prefixes, 0 suffixes, 0 required extensions, 1 regexes
+2025-11-03T04:45:19.737785Z DEBUG built glob set; 1 literals, 0 basenames, 0 extensions, 0 prefixes, 0 suffixes, 0 required extensions, 1 regexes
+2025-11-03T04:45:19.738718Z DEBUG opened gitignore file: /Users/stuermer/workspace/thebino/exif-sorter/.git/info/exclude
+2025-11-03T04:45:19.738720Z DEBUG opened gitignore file: /Users/stuermer/workspace/thebino/exif-sorter/.git/info/exclude
+2025-11-03T04:45:19.738874Z DEBUG /Users/stuermer/workspace/thebino/exif-sorter/target/testdir-28/cli/should_skip_directories_with_lack_of_permissions_for_source_directory/dateTimeOriginal.png
+2025-11-03T04:45:19.738915Z DEBUG /Users/stuermer/workspace/thebino/exif-sorter/target/testdir-28/cli/should_rename_duplicates_instead_of_overwriting/sub2/dateTimeOriginal.png
+2025-11-03T04:45:19.738956Z DEBUG /Users/stuermer/workspace/thebino/exif-sorter/target/testdir-28/cli/should_rename_duplicates_instead_of_overwriting/sub1/dateTimeOriginal.png
+2025-11-03T04:45:19.742831Z  INFO Found 1 images
+2025-11-03T04:45:19.742845Z  INFO Found 2 images
+2025-11-03T04:45:19.742961Z  WARN File '/Users/stuermer/workspace/thebino/exif-sorter/target/testdir-28/cli/should_skip_directories_with_lack_of_permissions_for_source_directory/dateTimeOriginal.png' can't read! (Permission denied (os error 13))
+2025-11-03T04:45:19.743335Z DEBUG File '/Users/stuermer/workspace/thebino/exif-sorter/target/testdir-28/cli/should_rename_duplicates_instead_of_overwriting/sub2/dateTimeOriginal.png' has date '1991-01-01'
+2025-11-03T04:45:19.743354Z DEBUG Create target dir /Users/stuermer/workspace/thebino/exif-sorter/target/testdir-28/cli/should_rename_duplicates_instead_of_overwriting/sorted/1991/1991-01-01
+2025-11-03T04:45:19.743429Z  INFO move /Users/stuermer/workspace/thebino/exif-sorter/target/testdir-28/cli/should_rename_duplicates_instead_of_overwriting/sub2/dateTimeOriginal.png to /Users/stuermer/workspace/thebino/exif-sorter/target/testdir-28/cli/should_rename_duplicates_instead_of_overwriting/sorted/1991/1991-01-01/dateTimeOriginal.png
+2025-11-03T04:45:19.743767Z DEBUG File '/Users/stuermer/workspace/thebino/exif-sorter/target/testdir-28/cli/should_rename_duplicates_instead_of_overwriting/sub1/dateTimeOriginal.png' has date '1991-01-01'
+2025-11-03T04:45:19.743811Z ERROR target_path exists /Users/stuermer/workspace/thebino/exif-sorter/target/testdir-28/cli/should_rename_duplicates_instead_of_overwriting/sorted/1991/1991-01-01/dateTimeOriginal.png
+2025-11-03T04:45:19.743889Z  INFO move /Users/stuermer/workspace/thebino/exif-sorter/target/testdir-28/cli/should_rename_duplicates_instead_of_overwriting/sub1/dateTimeOriginal.png to /Users/stuermer/workspace/thebino/exif-sorter/target/testdir-28/cli/should_rename_duplicates_instead_of_overwriting/sorted/1991/1991-01-01/dateTimeOriginal_581757.png
