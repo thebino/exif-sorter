@@ -1,10 +1,10 @@
+#![allow(deprecated)]
 use assert_cmd::Command;
-use imagemeta::exif;
-use img_parts::ImageEXIF;
+use eframe::egui::TextBuffer;
 use predicates::prelude::*;
-use std::io::Cursor;
+use std::path::PathBuf;
 use std::{
-    fs::{self, File},
+    fs::{self},
     os::unix::fs::PermissionsExt,
     path::Path,
 };
@@ -19,9 +19,18 @@ fn should_display_usage_when_executed_with_help_argument() {
 }
 
 #[test]
+fn should_display_help_for_cli_subcommands() {
+    let mut cmd = Command::cargo_bin("exif-sorter").unwrap();
+    cmd.args(["cli", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--immediate"));
+}
+
+#[test]
 fn should_die_with_non_existing_source_directory() {
     let mut cmd = Command::cargo_bin("exif-sorter").unwrap();
-    cmd.arg("--source-dir=non-existing")
+    cmd.args(["--source-dir=non-existing", "cli"])
         .assert()
         .failure()
         .stderr(predicate::str::contains("Invalid source directory:"))
@@ -30,94 +39,86 @@ fn should_die_with_non_existing_source_directory() {
 
 #[test]
 fn should_skip_directories_with_lack_of_permissions_for_source_directory() {
-    // create a test directory
-    let testdir = temp_dir::TempDir::new().unwrap();
-    let testpath = testdir.path();
+    // given
+    let root: PathBuf = testdir::testdir!();
+    let target = root.join("sorted");
 
-    // create a test file and restrict permission
-    let testfile = testdir.child("testfile");
-    std::fs::write(testfile, b"abc").unwrap();
-    let mut perms = fs::metadata(testpath).unwrap().permissions();
-    perms.set_mode(0o000);
-    fs::set_permissions(testpath, perms).unwrap();
+    let testfile = root.join("dateTimeOriginal.png");
+    let _ = fs::copy(
+        Path::new("tests/data/dateTimeOriginal.png"),
+        testfile.as_path(),
+    );
+
+    let mut permissions = fs::metadata(&testfile).unwrap().permissions();
+    permissions.set_mode(0o000);
+    assert_eq!(permissions.mode(), 0o000);
+    fs::set_permissions(&testfile, permissions).unwrap();
 
     let mut cmd = Command::cargo_bin("exif-sorter").unwrap();
-    cmd.arg("-s")
-        .arg(testpath)
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Permission denied"));
+    cmd.args([
+        "cli",
+        "-s",
+        root.as_path().to_string_lossy().as_str(),
+        "-t",
+        target.as_path().to_string_lossy().as_str(),
+        "--immediate",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("Permission denied"));
 }
 
 #[test]
-fn should_skip_file_without_exif_information_available() {
-    // create a test directory
-    let testdir = temp_dir::TempDir::new().unwrap();
-    let testpath = testdir.path();
+fn should_rename_duplicates_instead_of_overwriting() {
+    //given
+    let root: PathBuf = testdir::testdir!();
+    let target = root.join("sorted");
 
-    // create a test file and restrict permission
-    let testfile = testdir.child("testfile");
-    std::fs::write(testfile, b"abc").unwrap();
+    // sub1/testfile
+    let sub1 = root.join("sub1");
+    let _ = std::fs::create_dir(&sub1);
+    let testfile1 = sub1.join("dateTimeOriginal.png");
+    let _ = fs::copy(
+        Path::new("tests/data/dateTimeOriginal.png"),
+        testfile1.as_path(),
+    );
 
+    // sub2/testfile
+    let sub2 = root.join("sub2");
+    let _ = std::fs::create_dir(&sub2);
+    let testfile2 = sub2.join("dateTimeOriginal.png");
+    let _ = fs::copy(
+        Path::new("tests/data/dateTimeOriginal.png"),
+        testfile2.as_path(),
+    );
+
+    // when
     let mut cmd = Command::cargo_bin("exif-sorter").unwrap();
-    cmd.arg("-s")
-        .arg(testpath)
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("testfile"))
-        .stdout(predicate::str::contains("No exif information!"));
+    cmd.args([
+        "cli",
+        "-s",
+        root.as_path().to_string_lossy().as_str(),
+        "-t",
+        target.as_path().to_string_lossy().as_str(),
+        "--immediate",
+    ])
+    .assert()
+    .success();
+
+    let sorted = root.join("sorted/1991/1991-01-01");
+
+    // then
+    let count = fs::read_dir(sorted)
+        .unwrap()
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            if entry.path().is_file() {
+                Some(())
+            } else {
+                None
+            }
+        })
+        .count();
+    assert_eq!(count, 2);
 }
 
-#[allow(dead_code)]
-// #[test]
-fn should_rename_file_at_target_instead_of_overwriting() {
-    // create a test directory
-    let testdir = temp_dir::TempDir::new().unwrap();
-    let testpath = testdir.path();
-
-    let testfile1 = testdir.child("testfile1");
-    std::fs::write(&testfile1, b"abc").unwrap();
-    let _ = write_exif_to_file(&testfile1);
-
-    let testfile2 = testdir.child("testfile2");
-    std::fs::write(&testfile2, b"def").unwrap();
-    let _ = write_exif_to_file(&testfile2);
-
-    let mut cmd = Command::cargo_bin("exif-sorter").unwrap();
-    cmd.arg("-s")
-        .arg(testpath)
-        .assert()
-        .failure()
-        .stdout(predicate::str::contains("testfile1"))
-        .stdout(predicate::str::contains("No exif information!"));
-}
-// TODO: add test for dry-run
-// TODO: add test for file moved
-// TODO: add test for duplicate file (same filename only)
-
-#[allow(dead_code)]
-fn write_exif_to_file(path: &Path) -> Result<(), anyhow::Error> {
-    let input = fs::read(path)?;
-    let mut jpeg = img_parts::jpeg::Jpeg::from_bytes(input.into())?;
-
-    let exif = exif::Exif {
-        ifds: vec![exif::Ifd {
-            id: 0,
-            entries: vec![exif::Entry {
-                tag: 0x9003,
-                data: exif::EntryData::Ascii("1991:01:01 00:13:37".to_string()),
-            }],
-            children: Vec::new(),
-        }],
-    };
-
-    let mut out_exif = Cursor::new(Vec::new());
-    // exif_metadata.encode(&mut out_exif)?;
-    exif.encode(&mut out_exif)?;
-
-    jpeg.set_exif(Some(out_exif.into_inner().into()));
-    let output = File::create(path)?;
-    let _ = jpeg.encoder().write_to(output)?;
-
-    Ok(())
-}

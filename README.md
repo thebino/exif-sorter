@@ -5,7 +5,13 @@
 ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/thebino/exif-sorter/ci.yaml?style=for-the-badge)
 
 
-A simple tool to read the exif data from images and sort them into sub-directories based on those data.
+Exif-sorter is a simple tool to read the exif data from images and sort them into sub-directories based on the `DateTimeOriginal` which indicates the date/time when original image was taken.
+If this date is not found, the Files modification and creation date can be used instead.
+
+## Usage
+```bash
+exif-sorter -s unsorted_images -t sorted_images cli
+```
 
 
 > ⚠️⚠️⚠️
@@ -22,6 +28,14 @@ A simple tool to read the exif data from images and sort them into sub-directori
 <img src="cli.png"/>
 
 ## Cross compile via Docker
+Install cross
 ```shell
-CROSS_CONTAINER_OPTS="--platform linux/amd64" cross build --target x86_64-unknown-linux-gnu
+cargo install cross --git https://github.com/cross-rs/cross
 ```
+
+
+Build w/ cross
+```shell
+CROSS_CONTAINER_OPTS="--platform linux/amd64" cross build --target x86_64-unknown-linux-musl
+```
+

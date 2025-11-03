@@ -1,41 +1,14 @@
-use chrono::NaiveDate;
-use crossterm::event::{self, Event, KeyCode, KeyEvent};
-use crossterm::{
-    event::KeyEventKind,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-    ExecutableCommand,
-};
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::backend::Backend;
-use ratatui::buffer::Buffer;
-use ratatui::layout::{Alignment, Constraint, Layout, Rect};
-use ratatui::prelude::{Stylize, Terminal};
-use ratatui::style::palette::tailwind;
-use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::block::Title;
-use ratatui::widgets::{
-    BorderType, Clear, Gauge, ListState, Padding, Paragraph, StatefulWidget, TableState, Widget,
-};
-use ratatui::{
-    backend::CrosstermBackend,
-    widgets::{Block, Borders, List, ListItem},
-};
+use ratatui::prelude::Terminal;
+use ratatui::widgets::TableState;
+use std::io::Result;
+use std::path::PathBuf;
 
-use std::fs::File;
-use std::io::{stdout, Result};
-use std::net::Ipv4Addr;
-use std::path::Path;
-use std::{env, io};
-
-use crate::sorter::image::{Dates, Image};
+use crate::sorter;
+use crate::sorter::image::Image;
 
 use super::{events, ui};
-
-// pub struct ImageFile {
-//     pub(crate) source: String,
-//     pub(crate) target: String,
-//     pub(crate) moved: bool,
-// }
 
 /// Application state
 pub struct App {
@@ -93,54 +66,10 @@ impl App {
     }
 
     fn scan_source(&mut self) {
-        // TODO: scan source directory
-        if (self.progress.is_some()) {
-            self.progress = None;
-        } else {
-            self.progress = Some(10f64);
-            self.items.items = vec![
-                ///
-                Image {
-                    source_path: "/tmp/images/".to_string(),
-                    source_filename: "DSC_1234".to_string(),
-                    source_filetype: "NEF".to_string(),
-                    dates: Dates {
-                        exif_date_time_original: None,
-                        file_creation_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-                        file_modified_date: todo!() },
-                    target_path: "/tmp/images/sorted/2024-01-01".to_string(),
-                    target_filename: "DSC_1234".to_string(),
-                    target_filetype: "NEF".to_string(),
-                    error: None,
-                },
-                Image {
-                    source_path: "/tmp/images/".to_string(),
-                    source_filename: "DSC_1235".to_string(),
-                    source_filetype: "NEF".to_string(),
-                    dates: Dates {
-                        exif_date_time_original: None,
-                        file_creation_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-                        file_modified_date: todo!() },
-                    target_path: "/tmp/images/sorted/2024-01-01".to_string(),
-                    target_filename: "DSC_1235".to_string(),
-                    target_filetype: "NEF".to_string(),
-                    error: None,
-                },
-                Image {
-                    source_path: "/tmp/images/".to_string(),
-                    source_filename: "DSC_1236".to_string(),
-                    source_filetype: "NEF".to_string(),
-                    dates: Dates {
-                        exif_date_time_original: None,
-                        file_creation_date: NaiveDate::from_ymd_opt(2024, 1, 2).unwrap(),
-                        file_modified_date: todo!() },
-                    target_path: "/tmp/images/sorted/2024-01-02".to_string(),
-                    target_filename: "DSC_1236".to_string(),
-                    target_filetype: "NEF".to_string(),
-                    error: None,
-                },
-            ]
-        }
+        // let mut images = sorter::scan_dir(&PathBuf::from(self.source_dir.clone())).unwrap();
+
+        // sorter::read_exif_and_metadata(&mut images).expect("Failed to read image from source");
+        // self.items.items = images;
     }
 
     fn process_all(&mut self) {
