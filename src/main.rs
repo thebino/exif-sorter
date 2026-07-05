@@ -43,6 +43,26 @@ async fn main() {
                     process::exit(1);
                 }
             }
+            // Undo a previous run
+            Commands::Revert(revert_args) => {
+                if let Err(e) = cli::run_revert(revert_args) {
+                    eprintln!("error: {e:#}");
+                    process::exit(1);
+                }
+            }
+            Commands::Completions { shell } => {
+                use clap::CommandFactory as _;
+                let mut cmd = Args::command();
+                clap_complete::generate(*shell, &mut cmd, "exif-sorter", &mut std::io::stdout());
+            }
+            Commands::Manpage => {
+                use clap::CommandFactory as _;
+                let man = clap_mangen::Man::new(Args::command());
+                if let Err(e) = man.render(&mut std::io::stdout()) {
+                    eprintln!("error: {e:#}");
+                    process::exit(1);
+                }
+            }
         }
     } else {
         // Run GUI

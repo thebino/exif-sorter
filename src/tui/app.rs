@@ -66,19 +66,54 @@ impl App {
     }
 
     fn scan_source(&mut self) {
-        // let mut images = sorter::scan_dir(&PathBuf::from(self.source_dir.clone())).unwrap();
-
-        // sorter::read_exif_and_metadata(&mut images).expect("Failed to read image from source");
-        // self.items.items = images;
+        if let Ok(entries) = sorter::dir::scan_dir(&PathBuf::from(self.source_dir.clone())) {
+            self.items.items = entries
+                .into_iter()
+                .map(|entry| {
+                    Image::new(entry.into_path(), PathBuf::from(self.target_dir.clone()))
+                })
+                .collect();
+        }
     }
 
     fn process_all(&mut self) {
-        // TODO: process ALL
+        let options = sorter::ProcessOptions::default();
+        // NOTE: runs on the UI thread — the gauge only shows the final state.
+        // Live updates need the processing moved to a background thread that
+        // reports through a channel.
+        let progress = &mut self.progress;
+        let result = sorter::process(
+            &PathBuf::from(self.source_dir.clone()),
+            &PathBuf::from(self.target_dir.clone()),
+            &options,
+            |done, total| {
+                *progress = Some(done as f64 / total.max(1) as f64 * 100.0);
+            },
+        );
+        if result.is_ok() {
+            self.items.items.clear();
+        }
     }
 
     fn process_selected(&mut self) {
         if let Some(i) = self.items.state.selected() {
-            // TODO: process selected only
+            if let Some(image) = self.items.items.get(i).cloned() {
+                if let Ok((date, _)) = image.extract_date() {
+                    let mut image = image;
+                    if let Ok((target_dir, target_filename)) =
+                        image.set_target(date, sorter::config::DEFAULT_PATTERN)
+                    {
+                        image.target_dir = target_dir;
+                        image.target_filename = target_filename;
+                        if image
+                            .transfer_to_target(sorter::TransferMode::Copy, false)
+                            .is_ok()
+                        {
+                            self.items.items.remove(i);
+                        }
+                    }
+                }
+            }
         }
     }
 }

@@ -32,7 +32,8 @@ pub struct Args {
 #[derive(Parser)]
 #[clap(version, author, help_template = HELP_TEMPLATE, about, long_about)]
 pub struct CliArgs {
-    /// Will move each file immediate.
+    /// Deprecated, no effect: processing is always two-phase now
+    /// (scan and date all files first, then move them).
     #[arg(long)]
     pub immediate: bool,
 
@@ -40,7 +41,49 @@ pub struct CliArgs {
     #[arg(long)]
     pub include_target: bool,
 
-    /// Print findings to the output instead of moving any file.
+    /// Print findings to the output instead of touching any file.
+    #[arg(long)]
+    pub dry_run: bool,
+
+    /// Move files into the target instead of copying them.
+    /// Default is copy: the source stays untouched.
+    #[arg(long = "move")]
+    pub move_files: bool,
+
+    /// What to do when the target filename already exists
+    /// (default: suffix; may also come from the config file).
+    #[arg(long, value_enum)]
+    pub on_collision: Option<CollisionArg>,
+
+    /// Folder layout below the target directory. Tokens: {year}, {month},
+    /// {day}, {date}. Default: "{year}/{date}".
+    #[arg(long)]
+    pub pattern: Option<String>,
+
+    /// Path to a config file (default: ~/.config/exif-sorter/config.toml).
+    #[arg(long)]
+    pub config: Option<String>,
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+pub enum CollisionArg {
+    /// Append a random suffix and store both files (default).
+    Suffix,
+    /// Leave the colliding source file where it is.
+    Skip,
+    /// Byte-compare; identical files are recorded as duplicates and not
+    /// stored twice, different content gets a suffix.
+    Dedupe,
+}
+
+#[derive(Parser)]
+#[clap(version, author, help_template = HELP_TEMPLATE, about, long_about)]
+pub struct RevertArgs {
+    /// Path to the manifest CSV written by a previous run.
+    #[arg(short, long)]
+    pub manifest: String,
+
+    /// Print what would be reverted without touching any file.
     #[arg(long)]
     pub dry_run: bool,
 }
