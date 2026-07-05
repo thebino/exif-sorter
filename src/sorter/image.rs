@@ -15,6 +15,42 @@ use crate::error::AppError;
 
 use super::dates::Dates;
 
+/// Where a date was extracted from, ordered by trustworthiness.
+/// Recovered files (e.g. PhotoRec output) often carry filesystem timestamps
+/// from the recovery run, not the capture — callers can use this to route
+/// low-confidence dates differently.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DateSource {
+    ExifDateTimeOriginal,
+    ExifDateTimeDigitized,
+    ExifDateTime,
+    ExifGpsDate,
+    FileCreated,
+    FileModified,
+}
+
+impl std::fmt::Display for DateSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            DateSource::ExifDateTimeOriginal => "EXIF DateTimeOriginal",
+            DateSource::ExifDateTimeDigitized => "EXIF DateTimeDigitized",
+            DateSource::ExifDateTime => "EXIF DateTime",
+            DateSource::ExifGpsDate => "EXIF GPSDateStamp",
+            DateSource::FileCreated => "file creation date",
+            DateSource::FileModified => "file modified date",
+        };
+        f.write_str(s)
+    }
+}
+
+impl DateSource {
+    /// File timestamps are unreliable on recovered media (they reflect the
+    /// recovery, not the capture).
+    pub fn is_low_confidence(&self) -> bool {
+        matches!(self, DateSource::FileCreated | DateSource::FileModified)
+    }
+}
+
 #[derive(Clone)]
 pub struct Image {
     pub source_path: PathBuf,
@@ -91,30 +127,96 @@ impl Image {
     }
 
     pub fn read_exif(&self) -> anyhow::Result<NaiveDate> {
-        let filename = format!(
-            "{}.{}",
-            self.source_filename.clone(),
-            self.source_filetype.clone()
-        );
-        let a = self.source_path.clone().join(filename);
-
-        let path = std::fs::File::open(a.as_path())?;
-
-        let mut bufreader = std::io::BufReader::new(&path);
-        let exifreader = exif::Reader::new();
-        let exif = exifreader.read_from_container(&mut bufreader);
-
-        let date_time_original = match exif {
-            Ok(exif) => self.extract_datetimeoriginal_from_exif(exif),
-            Err(_) => bail!(AppError::NoExifInformation()),
-        }?
-        .date();
-
-        Ok(date_time_original)
+        self.read_exif_date().map(|(date, _)| date)
     }
 
-    fn extract_datetimeoriginal_from_exif(&self, exif: Exif) -> anyhow::Result<NaiveDateTime> {
-        let date = exif.get_field(Tag::DateTimeOriginal, In::PRIMARY);
+    /// Read the capture date from EXIF, trying tags from most to least
+    /// specific: DateTimeOriginal → DateTimeDigitized → DateTime → GPSDateStamp.
+    /// Implausible dates (camera clock reset to epoch/2000, dates in the
+    /// future) are skipped so the next source gets a chance.
+    pub fn read_exif_date(&self) -> anyhow::Result<(NaiveDate, DateSource)> {
+        let full_path = self
+            .source_path
+            .join(format!("{}.{}", self.source_filename, self.source_filetype));
+
+        let file = std::fs::File::open(full_path.as_path())?;
+
+        let mut bufreader = std::io::BufReader::new(&file);
+        let exifreader = exif::Reader::new();
+        let exif = match exifreader.read_from_container(&mut bufreader) {
+            Ok(exif) => exif,
+            Err(_) => bail!(AppError::NoExifInformation()),
+        };
+
+        const DATETIME_TAGS: [(Tag, DateSource); 3] = [
+            (Tag::DateTimeOriginal, DateSource::ExifDateTimeOriginal),
+            (Tag::DateTimeDigitized, DateSource::ExifDateTimeDigitized),
+            (Tag::DateTime, DateSource::ExifDateTime),
+        ];
+
+        for (tag, source) in DATETIME_TAGS {
+            match Self::extract_datetime_from_exif(&exif, tag) {
+                Ok(datetime) => {
+                    let date = datetime.date();
+                    if Self::is_plausible_date(date) {
+                        return Ok((date, source));
+                    }
+                    debug!(
+                        "File '{}': implausible {source} '{date}', trying next source",
+                        self.source_full()
+                    );
+                }
+                Err(e) => {
+                    debug!("File '{}': no {source} ({e:#})", self.source_full());
+                }
+            }
+        }
+
+        // GPS date comes from the satellite fix, independent of the camera
+        // clock — a good last resort when all datetime tags are missing.
+        if let Some(field) = exif.get_field(Tag::GPSDateStamp, In::PRIMARY) {
+            let date_str = field.display_value().to_string().replace('"', "");
+            let date = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")
+                .or_else(|_| NaiveDate::parse_from_str(&date_str, "%Y:%m:%d"));
+            if let Ok(date) = date {
+                if Self::is_plausible_date(date) {
+                    return Ok((date, DateSource::ExifGpsDate));
+                }
+            }
+        }
+
+        bail!(AppError::NoExifDateFound())
+    }
+
+    /// Full fallback chain: EXIF tags first, then filesystem timestamps
+    /// (earliest of creation/modified — on copied or recovered files the
+    /// modified date often predates the creation date).
+    pub fn extract_date(&self) -> anyhow::Result<(NaiveDate, DateSource)> {
+        if let Ok(result) = self.read_exif_date() {
+            return Ok(result);
+        }
+
+        let created = self.dates.file_creation_date.filter(|d| Self::is_plausible_date(*d));
+        let modified = self.dates.file_modified_date.filter(|d| Self::is_plausible_date(*d));
+
+        match (created, modified) {
+            (Some(c), Some(m)) if m < c => Ok((m, DateSource::FileModified)),
+            (Some(c), _) => Ok((c, DateSource::FileCreated)),
+            (None, Some(m)) => Ok((m, DateSource::FileModified)),
+            (None, None) => bail!(AppError::NoDateFound()),
+        }
+    }
+
+    /// Cameras with a dead clock battery reset to 1970 (epoch); dates before
+    /// consumer digital photography or in the future are rejected. A reset to
+    /// 2000-01-01 is indistinguishable from a real photo taken that day and
+    /// passes this check.
+    pub fn is_plausible_date(date: NaiveDate) -> bool {
+        date.year() >= 1980 && date <= Utc::now().date_naive()
+    }
+
+    fn extract_datetime_from_exif(exif: &Exif, tag: Tag) -> anyhow::Result<NaiveDateTime> {
+        let date = exif.get_field(tag, In::PRIMARY);
         match date {
             Some(date) => {
                 let date_str = date.display_value().to_string();

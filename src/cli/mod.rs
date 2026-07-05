@@ -22,14 +22,19 @@ pub fn run_cli(args: &Args, cli_args: &CliArgs) -> anyhow::Result<()> {
             for entry in scan_dir(source_path)? {
                 let mut image = Image::new(entry.into_path(), target_path.to_path_buf());
 
-                let date = image.read_exif();
-                match date {
-                    Ok(date) => {
-                        debug!(
-                            "File '{}' has date '{}'",
-                            image.source_full(),
-                            &date.to_string()
-                        );
+                match image.extract_date() {
+                    Ok((date, source)) => {
+                        if source.is_low_confidence() {
+                            warn!(
+                                "File '{}': no exif date, using {source} '{date}' (unreliable on recovered media)",
+                                image.source_full()
+                            );
+                        } else {
+                            debug!(
+                                "File '{}' has date '{date}' from {source}",
+                                image.source_full()
+                            );
+                        }
                         let (target_path, target_filename) = image.set_target(date)?;
                         image.target_dir = target_path;
                         image.target_filename = target_filename;

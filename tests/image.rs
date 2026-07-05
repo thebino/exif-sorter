@@ -1,7 +1,29 @@
 use std::path::{Path, PathBuf};
 
 use chrono::NaiveDate;
-use exif_sorter::sorter::image::Image;
+use exif_sorter::sorter::image::{DateSource, Image};
+
+/// Write a minimal TIFF stream containing only the given EXIF fields.
+/// kamadak-exif reads TIFF containers directly, so the output is a valid
+/// input for `read_exif_date` without needing a full JPEG wrapper.
+fn write_exif_fixture(path: &Path, fields: &[exif::Field]) {
+    use exif::experimental::Writer;
+    let mut writer = Writer::new();
+    for field in fields {
+        writer.push_field(field);
+    }
+    let mut buf = std::io::Cursor::new(Vec::new());
+    writer.write(&mut buf, false).expect("failed to write EXIF fixture");
+    std::fs::write(path, buf.into_inner()).expect("failed to write fixture file");
+}
+
+fn ascii_field(tag: exif::Tag, value: &str) -> exif::Field {
+    exif::Field {
+        tag,
+        ifd_num: exif::In::PRIMARY,
+        value: exif::Value::Ascii(vec![value.as_bytes().to_vec()]),
+    }
+}
 
 #[test]
 fn test_extract_creation_date() {
@@ -49,6 +71,130 @@ test_datetime_extraction_cases! {
     ricoh_gr2_dng: "RICOH_GR2.DNG" => "2007:11:25",
     sony_nex_6: "DSC09903.ARW" => "2015:01:17",
     sony_a6000_arw: "SONY ILCE-6000 6048x4024_012003.arw" => "2014:02:18",
+}
+
+// ---- Date fallback chain: DateTimeOriginal → Digitized → DateTime → GPS → file dates ----
+
+#[test]
+fn read_exif_date_falls_back_to_datetime_digitized() {
+    // given: EXIF with DateTimeDigitized but no DateTimeOriginal
+    let tmp = testdir::testdir!();
+    let path = tmp.join("digitized_only.tif");
+    write_exif_fixture(
+        &path,
+        &[ascii_field(exif::Tag::DateTimeDigitized, "2016:03:04 10:11:12")],
+    );
+    let image = Image::new(path.clone(), path);
+
+    // when
+    let result = image.read_exif_date();
+
+    // then
+    let (date, source) = result.expect("expected fallback to DateTimeDigitized");
+    assert_eq!(date, NaiveDate::from_ymd_opt(2016, 3, 4).unwrap());
+    assert_eq!(source, DateSource::ExifDateTimeDigitized);
+}
+
+#[test]
+fn read_exif_date_falls_back_to_datetime_tag() {
+    // given: EXIF with only the plain DateTime tag (0x0132) — the only date
+    // tag many old cameras write
+    let tmp = testdir::testdir!();
+    let path = tmp.join("datetime_only.tif");
+    write_exif_fixture(
+        &path,
+        &[ascii_field(exif::Tag::DateTime, "2015:06:07 08:09:10")],
+    );
+    let image = Image::new(path.clone(), path);
+
+    // when
+    let result = image.read_exif_date();
+
+    // then
+    let (date, source) = result.expect("expected fallback to DateTime");
+    assert_eq!(date, NaiveDate::from_ymd_opt(2015, 6, 7).unwrap());
+    assert_eq!(source, DateSource::ExifDateTime);
+}
+
+#[test]
+fn read_exif_date_skips_implausible_epoch_date() {
+    // A camera with a dead clock battery writes 1970-01-01 into
+    // DateTimeOriginal. Trusting it files every affected photo into a
+    // confidently-wrong 1970/ folder; the chain must skip it and use the
+    // next plausible source instead.
+    let tmp = testdir::testdir!();
+    let path = tmp.join("epoch_original.tif");
+    write_exif_fixture(
+        &path,
+        &[
+            ascii_field(exif::Tag::DateTimeOriginal, "1970:01:01 00:00:00"),
+            ascii_field(exif::Tag::DateTime, "2018:09:10 11:12:13"),
+        ],
+    );
+    let image = Image::new(path.clone(), path);
+
+    // when
+    let result = image.read_exif_date();
+
+    // then
+    let (date, source) = result.expect("expected implausible date to be skipped");
+    assert_eq!(date, NaiveDate::from_ymd_opt(2018, 9, 10).unwrap());
+    assert_eq!(source, DateSource::ExifDateTime);
+}
+
+#[test]
+fn read_exif_date_falls_back_to_gps_date() {
+    // given: EXIF with only GPSDateStamp — GPS time comes from the satellite
+    // fix and is correct even when the camera clock was never set
+    let tmp = testdir::testdir!();
+    let path = tmp.join("gps_only.tif");
+    write_exif_fixture(
+        &path,
+        &[ascii_field(exif::Tag::GPSDateStamp, "2019:08:15")],
+    );
+    let image = Image::new(path.clone(), path);
+
+    // when
+    let result = image.read_exif_date();
+
+    // then
+    let (date, source) = result.expect("expected fallback to GPSDateStamp");
+    assert_eq!(date, NaiveDate::from_ymd_opt(2019, 8, 15).unwrap());
+    assert_eq!(source, DateSource::ExifGpsDate);
+}
+
+#[test]
+fn extract_date_falls_back_to_file_date_without_exif() {
+    // Recovered files often have no EXIF at all. extract_date must fall back
+    // to filesystem timestamps and flag the result as low confidence so the
+    // caller can warn — file dates on recovered media reflect the recovery
+    // run, not the capture.
+    let tmp = testdir::testdir!();
+    let path = tmp.join("no_exif.jpg");
+    std::fs::write(&path, b"not a real image").unwrap();
+    let image = Image::new(path.clone(), path);
+
+    // when
+    let result = image.extract_date();
+
+    // then
+    let (date, source) = result.expect("expected fallback to file dates");
+    assert!(source.is_low_confidence());
+    assert_eq!(date, chrono::Utc::now().date_naive());
+}
+
+#[test]
+fn is_plausible_date_rejects_epoch_and_future() {
+    assert!(!Image::is_plausible_date(
+        NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()
+    ));
+    assert!(!Image::is_plausible_date(
+        chrono::Utc::now().date_naive() + chrono::Days::new(365)
+    ));
+    assert!(Image::is_plausible_date(
+        NaiveDate::from_ymd_opt(1985, 6, 1).unwrap()
+    ));
+    assert!(Image::is_plausible_date(chrono::Utc::now().date_naive()));
 }
 
 // ---- Panic safety: Image::new must not panic on edge-case paths ----
