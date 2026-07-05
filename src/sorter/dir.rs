@@ -1,17 +1,15 @@
-use std::{fs::File, io::Read, path::Path, sync::Arc};
+use std::path::Path;
+use std::sync::{Arc, Mutex};
 
-use eframe::egui::mutex::Mutex;
-use ignore::{Walk, WalkBuilder};
-use tracing::{debug, info, warn};
-use walkdir::{DirEntry, WalkDir};
-
-use super::image::Image;
+use ignore::WalkBuilder;
+use tracing::{debug, info};
 
 fn is_image_file(entry: &ignore::DirEntry) -> bool {
     matches!(
         entry.path().extension().and_then(|s| s.to_str()),
         Some(
-            "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "dng" | "nef" | "cr2" | "arw" | "fff"
+            "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "dng" | "nef" | "cr2" | "arw"
+                | "fff"
         )
     )
 }
@@ -33,37 +31,22 @@ pub fn scan_dir(dir: &Path) -> anyhow::Result<Vec<ignore::DirEntry>> {
         .build_parallel();
 
     walker.run(|| {
-        Box::new(|result| {
+        let files_arc = Arc::clone(&files_arc);
+        Box::new(move |result| {
             if let Ok(entry) = result {
                 if entry.file_type().map(|ft| ft.is_file()).unwrap_or(true) && is_image_file(&entry)
                 {
-                    debug!(
-                        "{:<100}",
-                        entry.clone().into_path().into_os_string().to_str().unwrap()
-                    );
+                    // Use OsStr-based display so non-UTF-8 filenames don't panic.
+                    debug!("{:<100}", entry.path().as_os_str().to_string_lossy());
 
-                    let mut files = files_arc.lock();
-                    files.push(entry);
+                    files_arc.lock().expect("mutex poisoned").push(entry);
                 }
             }
             ignore::WalkState::Continue
-
-            /*
-            let entry = result.unwrap();
-            // TODO: skip directories
-            warn!(
-                "{:<100}",
-                entry.clone().into_path().into_os_string().to_str().unwrap()
-            );
-            let mut guard = files_arc.lock();
-            guard.push(entry);
-
-            ignore::WalkState::Continue
-            */
         })
     });
 
-    let mut guard = files_arc.lock();
+    let mut guard = files_arc.lock().expect("mutex poisoned");
     files.append(&mut guard);
 
     info!("Found {} images", files.len());

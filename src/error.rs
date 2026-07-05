@@ -8,6 +8,10 @@ pub enum AppError {
     InvalidSource { expected: String },
     #[error("No DateTimeOriginal found!")]
     NoDateTimeOriginalFound(),
+    #[error("No usable date tag found in exif data!")]
+    NoExifDateFound(),
     #[error("No exif information!")]
     NoExifInformation(),
+    #[error("No date found in exif data or file metadata!")]
+    NoDateFound(),
 }

@@ -4,84 +4,133 @@ on:
   push:
     branches:
       - "**"
+    tags:
+      - "v*"
   pull_request:
   workflow_dispatch:
 
 env:
-  CRATE_NAME: exif-tool
-  GITHUB_TOKEN: ${{ github.token }}
   RUST_BACKTRACE: 1
 
 jobs:
+  test:
+    name: Test - ${{ matrix.os }}
+    strategy:
+      matrix:
+        # No Windows: tests use unix-only APIs (PermissionsExt)
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run tests
+        run: cargo test --locked
+
   release:
     name: Release - ${{ matrix.platform.release_for }}
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    permissions:
+      contents: write
     strategy:
       matrix:
         platform:
-          - release_for: Linuz-x86_64
-            os: ubuntu-20.04
+          - release_for: Linux-x86_64
+            os: ubuntu-22.04
             target: x86_64-unknown-linux-musl
             bin: exif-sorter
             name: exif-sorter-Linux-x86_64-musl.tar.gz
-            command: build
 
-          # - release_for: Windows-x86_64
-          #   os: windows-latest
-          #   target: x86_64-pc-windows-msvc
-          #   bin: exif-sorter.exe
-          #   name: exif-sorter-Windows-x86_64.zip
-          #   command: both
+          - release_for: Windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin: exif-sorter.exe
+            name: exif-sorter-Windows-x86_64.zip
 
           - release_for: macOS-x86_64
-            os: macOS-latest
+            os: macos-latest
             target: x86_64-apple-darwin
             bin: exif-sorter
             name: exif-sorter-Darwin-x86_64.tar.gz
-            command: both
+
+          - release_for: macOS-aarch64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            bin: exif-sorter
+            name: exif-sorter-Darwin-aarch64.tar.gz
 
     runs-on: ${{ matrix.platform.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Install musl-tools on Linux
-        run: sudo apt-get update --yes && sudo apt-get install --yes musl-tools
-        if: contains(matrix.platform.name, 'musl')
-        
       - name: Build binary
-        uses: houseabsolute/actions-rust-cross@v0
+        uses: houseabsolute/actions-rust-cross@v1
         with:
-          command: ${{ matrix.platform.command }}
+          command: build
           target: ${{ matrix.platform.target }}
           args: "--locked --release"
           strip: true
-          
+
+      - name: Generate completions and man page
+        shell: bash
+        run: |
+          BIN="target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}"
+          mkdir -p stage/completions
+          cp "$BIN" LICENSE.md README.md stage/
+          for sh in bash zsh fish powershell; do
+            "$BIN" completions "$sh" > "stage/completions/exif-sorter.$sh"
+          done
+          "$BIN" manpage > stage/exif-sorter.1
+
       - name: Package as archive
         shell: bash
         run: |
-          cd target/${{ matrix.platform.target }}/release
-          if [[ "${{ matrix.platform.os }}" == "windows-latest" ]]; then
-            7z a ../../../${{ matrix.platform.name }} ${{ matrix.platform.bin }}
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            7z a ${{ matrix.platform.name }} ./stage/*
           else
-            tar czvf ../../../${{ matrix.platform.name }} ${{ matrix.platform.bin }}
+            tar czvf ${{ matrix.platform.name }} -C stage .
           fi
-          cd -
-        if: |
-          matrix.toolchain == 'stable' &&
-          ( startsWith( github.ref, 'refs/tags/v' ) ||
-            github.ref == 'refs/tags/test-release' )
 
-      - name: Publish release artifacts
-        uses: actions/upload-artifact@v4
+      - name: Generate SHA-256 checksum
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            shasum -a 256 ${{ matrix.platform.name }} > ${{ matrix.platform.name }}.sha256
+          else
+            sha256sum ${{ matrix.platform.name }} > ${{ matrix.platform.name }}.sha256
+          fi
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
         with:
-          name: precious-${{ matrix.platform.os_name }}
-          path: "precious-*"
-        if: matrix.toolchain == 'stable' && github.ref == 'refs/tags/test-release'
-        
-      - name: Generate SHA-256
-        run: shasum -a 256 ${{ matrix.platform.name }}
-        if: |
-          matrix.toolchain == 'stable' &&
-          matrix.platform.os == 'macOS-latest' &&
-          ( startsWith( github.ref, 'refs/tags/v' ) ||
-            github.ref == 'refs/tags/test-release' )
+          files: |
+            ${{ matrix.platform.name }}
+            ${{ matrix.platform.name }}.sha256
+          generate_release_notes: true
+
+  publish-crate:
+    name: Publish to crates.io
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # Requires the CARGO_REGISTRY_TOKEN repository secret (crates.io API
+      # token from https://crates.io/settings/tokens).
+      - name: Publish
+        run: cargo publish --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

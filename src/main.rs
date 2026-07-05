@@ -19,6 +19,8 @@ mod gui;
 pub mod sorter;
 mod tui;
 
+const LOGGING_PATH: &str = "./logs";
+
 #[tokio::main]
 async fn main() {
     let _guard = init_logging();
@@ -52,7 +54,8 @@ async fn main() {
 }
 
 fn init_logging() -> tracing_appender::non_blocking::WorkerGuard {
-    let file_appender = rolling::daily(".", "exif-sorter.log");
+
+    let file_appender = rolling::daily(LOGGING_PATH, "exif-sorter.log");
     let stdout_layer = tracing_subscriber::fmt::layer()
         .with_writer(std::io::stdout)
         .with_thread_ids(false)
@@ -74,6 +77,7 @@ fn init_logging() -> tracing_appender::non_blocking::WorkerGuard {
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug"));
 
     tracing_subscriber::Registry::default()
+        .with(env_filter)
         .with(stdout_layer.with_filter(LevelFilter::WARN))
         .with(file_layer.with_filter(LevelFilter::DEBUG))
         .init();
