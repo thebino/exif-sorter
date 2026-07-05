@@ -28,26 +28,35 @@ fn ascii_field(tag: exif::Tag, value: &str) -> exif::Field {
 
 #[test]
 fn test_extract_creation_date() {
+    // Git checkouts do not preserve file timestamps, so this test must not
+    // assert against a fixed date of a tracked file (breaks on every fresh
+    // clone / CI runner). A freshly created file has today's creation date.
     // given
-    let path = Path::new("tests/data/exif/NIKON CORPORATION NIKON D50 3040x2014_019917.nef");
-    let file = Image::new(path.to_path_buf(), path.to_path_buf());
-
-    let expected = NaiveDate::from_ymd_opt(2024, 10, 19).unwrap();
+    let tmp = testdir::testdir!();
+    let path = tmp.join("fresh.jpg");
+    std::fs::write(&path, b"x").unwrap();
+    let file = Image::new(path.clone(), path);
 
     // when
     let date = file.extract_file_creation_date();
 
     // then
     assert!(date.is_ok());
-    assert_eq!(date.unwrap(), expected);
+    assert_eq!(date.unwrap(), chrono::Utc::now().date_naive());
 }
 
 #[test]
 fn test_extract_modification_date() {
+    // Deterministic in every environment: the mtime is set explicitly
+    // instead of relying on checkout timestamps.
     // given
-    let path = Path::new("tests/data/exif/NIKON CORPORATION NIKON D50 3040x2014_019917.nef");
-    let file = Image::new(path.to_path_buf(), path.to_path_buf());
-    let expected = NaiveDate::from_ymd_opt(2025, 11, 3).unwrap();
+    let tmp = testdir::testdir!();
+    let path = tmp.join("dated.jpg");
+    std::fs::write(&path, b"x").unwrap();
+    let mtime = filetime::FileTime::from_unix_time(1_588_636_800, 0); // 2020-05-05
+    filetime::set_file_mtime(&path, mtime).unwrap();
+    let file = Image::new(path.clone(), path);
+    let expected = NaiveDate::from_ymd_opt(2020, 5, 5).unwrap();
 
     // when
     let date = file.extract_file_modified_date();

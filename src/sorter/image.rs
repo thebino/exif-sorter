@@ -259,8 +259,8 @@ impl Image {
         }
     }
 
-    pub fn extract_file_creation_date(self) -> anyhow::Result<NaiveDate> {
-        let file = File::open(self.source_path)?;
+    pub fn extract_file_creation_date(&self) -> anyhow::Result<NaiveDate> {
+        let file = File::open(self.source_full())?;
         let system_time = file.metadata()?.created()?;
         let duration_since_epoch = system_time
             .duration_since(UNIX_EPOCH)
@@ -274,8 +274,8 @@ impl Image {
             .date())
     }
 
-    pub fn extract_file_modified_date(self) -> anyhow::Result<NaiveDate> {
-        let file = File::open(self.source_path)?;
+    pub fn extract_file_modified_date(&self) -> anyhow::Result<NaiveDate> {
+        let file = File::open(self.source_full())?;
         let system_time = file.metadata()?.modified()?;
         let duration_since_epoch = system_time
             .duration_since(UNIX_EPOCH)

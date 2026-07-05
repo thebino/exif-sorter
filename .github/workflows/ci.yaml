@@ -24,6 +24,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      # The EXIF test fixtures (tests/data/exif, ~430 MB) are stored in Git
+      # LFS; without pulling them the checkout contains only pointer stubs
+      # and every EXIF test fails. LFS objects are cached because GitHub
+      # meters LFS bandwidth (1 GB/month on the free plan) — without the
+      # cache two CI runs would exhaust the quota.
+      - name: List LFS objects for cache key
+        run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
+
+      - name: Cache LFS objects
+        uses: actions/cache@v4
+        with:
+          path: .git/lfs
+          key: lfs-${{ hashFiles('.lfs-assets-id') }}
+
+      - name: Pull LFS objects
+        run: git lfs pull
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -128,8 +145,6 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      # Requires the CARGO_REGISTRY_TOKEN repository secret (crates.io API
-      # token from https://crates.io/settings/tokens).
       - name: Publish
         run: cargo publish --locked
         env:
