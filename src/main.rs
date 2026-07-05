@@ -77,6 +77,7 @@ fn init_logging() -> tracing_appender::non_blocking::WorkerGuard {
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug"));
 
     tracing_subscriber::Registry::default()
+        .with(env_filter)
         .with(stdout_layer.with_filter(LevelFilter::WARN))
         .with(file_layer.with_filter(LevelFilter::DEBUG))
         .init();

@@ -29,7 +29,10 @@ pub struct Image {
 
 impl Image {
     pub fn new(path: PathBuf, target: PathBuf) -> Self {
-        let filename = path.file_stem().unwrap().to_str().unwrap();
+        let filename = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default();
         let filetype = path
             .extension()
             .unwrap_or(OsStr::new(""))
@@ -50,7 +53,7 @@ impl Image {
         };
 
         Self {
-            source_path: path.parent().unwrap().to_path_buf(),
+            source_path: path.parent().unwrap_or_else(|| Path::new("")).to_path_buf(),
             source_filename: filename.to_string(),
             source_filetype: filetype.clone(),
             dates: Dates::new(created, modified),
@@ -85,15 +88,6 @@ impl Image {
             self.target_filename,
             self.target_filetype
         )
-    }
-
-    pub fn read_dates(mut self) -> anyhow::Result<()> {
-        let path = std::fs::File::open(self.source_path.clone())?;
-
-        let file_creation_date = self.clone().extract_file_creation_date()?;
-        let file_modified_date = self.extract_file_modified_date()?;
-
-        Ok(())
     }
 
     pub fn read_exif(&self) -> anyhow::Result<NaiveDate> {
@@ -146,32 +140,32 @@ impl Image {
     }
 
     pub fn extract_file_creation_date(self) -> anyhow::Result<NaiveDate> {
-        let file = File::open(self.source_path).unwrap();
+        let file = File::open(self.source_path)?;
         let system_time = file.metadata()?.created()?;
         let duration_since_epoch = system_time
             .duration_since(UNIX_EPOCH)
-            .expect("Creation date of the file is in the future!");
+            .map_err(|e| anyhow::anyhow!("File creation timestamp is before Unix epoch: {e}"))?;
 
         let secs = duration_since_epoch.as_secs() as i64;
         let nanos = duration_since_epoch.subsec_nanos();
 
         Ok(NaiveDateTime::from_timestamp_opt(secs, nanos)
-            .unwrap_or_else(|| NaiveDateTime::from_timestamp(secs, nanos))
+            .ok_or_else(|| anyhow::anyhow!("Timestamp out of range: {secs}s {nanos}ns"))?
             .date())
     }
 
     pub fn extract_file_modified_date(self) -> anyhow::Result<NaiveDate> {
-        let file = File::open(self.source_path).unwrap();
+        let file = File::open(self.source_path)?;
         let system_time = file.metadata()?.modified()?;
         let duration_since_epoch = system_time
             .duration_since(UNIX_EPOCH)
-            .expect("Modification date of the file is in the future!");
+            .map_err(|e| anyhow::anyhow!("File modification timestamp is before Unix epoch: {e}"))?;
 
         let secs = duration_since_epoch.as_secs() as i64;
         let nanos = duration_since_epoch.subsec_nanos();
 
         Ok(NaiveDateTime::from_timestamp_opt(secs, nanos)
-            .unwrap_or_else(|| NaiveDateTime::from_timestamp(secs, nanos))
+            .ok_or_else(|| anyhow::anyhow!("Timestamp out of range: {secs}s {nanos}ns"))?
             .date())
     }
 
@@ -210,29 +204,33 @@ impl Image {
             debug!("Create target dir {}", self.target_dir.to_string_lossy());
 
             if !dry_run {
-                fs::create_dir_all(self.target_dir.clone());
+                fs::create_dir_all(self.target_dir.clone())?;
             }
         }
 
         info!("move {} to {}", self.source_full(), self.target_full());
         if !dry_run {
-            let result = fs::copy(
-                Path::new(&self.source_full()),
-                Path::new(&self.target_full()),
-            );
-            // remove only if copy was successful
-            match result {
-                Ok(r) => {
-                    fs::remove_file(Path::new(&self.source_full()));
-                }
-                Err(e) => {
-                    error!(
-                        "move {} to {} failed! ({e:#})",
-                        self.source_full(),
-                        self.target_full()
-                    );
-                }
+            let source_str = self.source_full();
+            let target_str = self.target_full();
+            let source = Path::new(&source_str);
+            let target = Path::new(&target_str);
+
+            // Atomically claim the target path before writing. If another
+            // process created the file between set_target() and here (TOCTOU),
+            // create_new returns AlreadyExists and we abort rather than
+            // silently overwriting data that belongs to someone else.
+            fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(target)
+                .map_err(|e| anyhow::anyhow!("Cannot create target {}: {e}", self.target_full()))?;
+
+            if let Err(e) = fs::copy(source, target) {
+                let _ = fs::remove_file(target); // remove the empty claim file
+                return Err(e.into());
             }
+
+            fs::remove_file(source)?;
         }
 
         Ok(())
