@@ -4,14 +4,28 @@ use std::sync::{Arc, Mutex};
 use ignore::WalkBuilder;
 use tracing::{debug, info};
 
+const SUPPORTED_EXTENSIONS: [&str; 17] = [
+    // images
+    "png", "jpg", "jpeg", "gif", "bmp", "webp", "heic", "heif",
+    // raw
+    "dng", "nef", "cr2", "arw", "fff",
+    // video (MP4/QuickTime containers)
+    "mp4", "mov", "m4v", "3gp",
+];
+
 fn is_image_file(entry: &ignore::DirEntry) -> bool {
-    matches!(
-        entry.path().extension().and_then(|s| s.to_str()),
-        Some(
-            "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "dng" | "nef" | "cr2" | "arw"
-                | "fff"
-        )
-    )
+    // Case-insensitive: cameras write uppercase extensions (DSC09903.ARW,
+    // R0010002.JPG) into DCIM directories.
+    entry
+        .path()
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|ext| {
+            SUPPORTED_EXTENSIONS
+                .iter()
+                .any(|e| ext.eq_ignore_ascii_case(e))
+        })
+        .unwrap_or(false)
 }
 
 /// Scan given directory including its subdirectories and returns a list of findings including their source path

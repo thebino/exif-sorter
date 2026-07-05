@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use chrono::NaiveDate;
 use exif_sorter::sorter::image::{DateSource, Image};
+use exif_sorter::sorter::TransferMode;
 
 /// Write a minimal TIFF stream containing only the given EXIF fields.
 /// kamadak-exif reads TIFF containers directly, so the output is a valid
@@ -184,6 +185,105 @@ fn extract_date_falls_back_to_file_date_without_exif() {
 }
 
 #[test]
+fn filename_dates_are_extracted_for_common_camera_and_messenger_patterns() {
+    use exif_sorter::sorter::filename_date::date_from_filename;
+
+    let cases = [
+        ("IMG_20190412_183000", Some((2019, 4, 12))),   // Android camera
+        ("PXL_20210704_123456789", Some((2021, 7, 4))), // Pixel
+        ("IMG-20200105-WA0001", Some((2020, 1, 5))),    // WhatsApp
+        ("signal-2020-01-05-120000", Some((2020, 1, 5))),
+        ("2019-04-12 vacation", Some((2019, 4, 12))),
+        ("2019_04_12_hike", Some((2019, 4, 12))),
+        ("DSC_0042", None),          // frame counter, no date
+        ("19700101", None),          // implausible (epoch reset)
+        ("1234567890", None),        // unix timestamp digits, not a date
+        ("photo", None),             // no digits at all
+        ("20991231", None),          // future date
+    ];
+    for (stem, expected) in cases {
+        let expected = expected.map(|(y, m, d)| NaiveDate::from_ymd_opt(y, m, d).unwrap());
+        assert_eq!(
+            date_from_filename(stem),
+            expected,
+            "unexpected result for filename stem '{stem}'"
+        );
+    }
+}
+
+#[test]
+fn extract_date_uses_filename_before_file_timestamps() {
+    // A file without EXIF but with a dated name (EXIF-stripped messenger
+    // export) must be dated from the name — a deliberate stamp — instead of
+    // the unreliable filesystem timestamps.
+    let tmp = testdir::testdir!();
+    let path = tmp.join("IMG-20200105-WA0001.jpg");
+    std::fs::write(&path, b"not a real image").unwrap();
+    let image = Image::new(path.clone(), path);
+
+    let (date, source) = image.extract_date().expect("expected filename date");
+    assert_eq!(date, NaiveDate::from_ymd_opt(2020, 1, 5).unwrap());
+    assert_eq!(source, DateSource::Filename);
+    assert!(!source.is_low_confidence());
+}
+
+/// Build a minimal MP4: an `ftyp` box and a `moov` box containing an `mvhd`
+/// (version 0) with the given creation time in seconds since 1904-01-01.
+fn minimal_mp4(creation_time_1904: u32) -> Vec<u8> {
+    let mut mvhd_content = vec![0u8; 12];
+    // version 0 + flags already zero; creation_time at offset 4
+    mvhd_content[4..8].copy_from_slice(&creation_time_1904.to_be_bytes());
+
+    let mut mvhd = Vec::new();
+    mvhd.extend_from_slice(&(8 + mvhd_content.len() as u32).to_be_bytes());
+    mvhd.extend_from_slice(b"mvhd");
+    mvhd.extend_from_slice(&mvhd_content);
+
+    let mut moov = Vec::new();
+    moov.extend_from_slice(&(8 + mvhd.len() as u32).to_be_bytes());
+    moov.extend_from_slice(b"moov");
+    moov.extend_from_slice(&mvhd);
+
+    let mut data = Vec::new();
+    data.extend_from_slice(&16u32.to_be_bytes());
+    data.extend_from_slice(b"ftypisom");
+    data.extend_from_slice(&[0, 0, 0, 0]);
+    data.extend_from_slice(&moov);
+    data
+}
+
+#[test]
+fn extract_date_reads_mp4_creation_time() {
+    // given: 2020-05-05 00:00:00 UTC = 1588636800 unix + 2082844800 offset
+    let tmp = testdir::testdir!();
+    let path = tmp.join("clip.mp4");
+    std::fs::write(&path, minimal_mp4(1_588_636_800 + 2_082_844_800)).unwrap();
+    let image = Image::new(path.clone(), path);
+
+    // when
+    let result = image.extract_date();
+
+    // then
+    let (date, source) = result.expect("expected video creation date");
+    assert_eq!(date, NaiveDate::from_ymd_opt(2020, 5, 5).unwrap());
+    assert_eq!(source, DateSource::VideoCreationTime);
+}
+
+#[test]
+fn mp4_with_unset_creation_time_falls_through() {
+    // Cameras without a clock write creation_time 0 (= 1904-01-01), which
+    // must not be trusted; the chain continues (here: filename date).
+    let tmp = testdir::testdir!();
+    let path = tmp.join("VID_20210704_120000.mp4");
+    std::fs::write(&path, minimal_mp4(0)).unwrap();
+    let image = Image::new(path.clone(), path);
+
+    let (date, source) = image.extract_date().expect("expected filename fallback");
+    assert_eq!(date, NaiveDate::from_ymd_opt(2021, 7, 4).unwrap());
+    assert_eq!(source, DateSource::Filename);
+}
+
+#[test]
 fn is_plausible_date_rejects_epoch_and_future() {
     assert!(!Image::is_plausible_date(
         NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()
@@ -240,13 +340,12 @@ fn extract_modified_date_returns_error_for_missing_file() {
     assert!(result.is_err(), "expected Err for missing file, got Ok");
 }
 
-// ---- Discarded errors: move_to_target must propagate failures as Err ----
+// ---- Discarded errors: transfer_to_target must propagate failures as Err ----
 
 #[test]
-fn move_to_target_returns_error_when_source_does_not_exist() {
-    // move_to_target currently logs copy/remove failures and returns Ok(()).
+fn transfer_to_target_returns_error_when_source_does_not_exist() {
     // Returning Ok on failure masks data loss: the caller has no way to
-    // detect that the file was not moved and cannot retry or warn the user.
+    // detect that the file was not transferred and cannot retry or warn.
     let tmp = testdir::testdir!();
     let target = tmp.join("sorted");
 
@@ -255,17 +354,78 @@ fn move_to_target_returns_error_when_source_does_not_exist() {
     image.target_filename = "ghost".to_string();
     image.target_filetype = "jpg".to_string();
 
-    let result = image.move_to_target(false);
+    let result = image.transfer_to_target(TransferMode::Move, false);
     assert!(
         result.is_err(),
-        "move_to_target returned Ok even though source did not exist"
+        "transfer_to_target returned Ok even though source did not exist"
     );
+}
+
+// ---- Copy mode: source must stay untouched ----
+
+#[test]
+fn transfer_to_target_copy_keeps_source() {
+    // Copy is the default mode because the tool runs against just-recovered
+    // data: the source must never be modified unless --move is given.
+    let tmp = testdir::testdir!();
+    let source_dir = tmp.join("source");
+    let target_dir = tmp.join("sorted/2020/2020-05-05");
+    std::fs::create_dir_all(&source_dir).unwrap();
+
+    let source_file = source_dir.join("photo.jpg");
+    std::fs::write(&source_file, b"image data").unwrap();
+
+    let mut image = Image::new(source_file.clone(), target_dir.clone());
+    image.target_filename = "photo".to_string();
+    image.target_filetype = "jpg".to_string();
+
+    image
+        .transfer_to_target(TransferMode::Copy, false)
+        .expect("copy failed");
+
+    assert!(source_file.exists(), "copy mode must not remove the source");
+    let copied = target_dir.join("photo.jpg");
+    assert_eq!(std::fs::read(&copied).unwrap(), b"image data");
+}
+
+// ---- Timestamp preservation: sorting must not destroy the mtime signal ----
+
+#[test]
+fn transfer_to_target_preserves_modified_time() {
+    // After a sort, the file's mtime is the last date signal outside of
+    // EXIF (PhotoRec stamps the capture date into it). Both transfer modes
+    // must keep the original modified time.
+    for mode in [TransferMode::Move, TransferMode::Copy] {
+        let tmp = testdir::testdir!();
+        let source_dir = tmp.join(format!("source-{mode:?}"));
+        let target_dir = tmp.join(format!("sorted-{mode:?}/2020/2020-05-05"));
+        std::fs::create_dir_all(&source_dir).unwrap();
+
+        let source_file = source_dir.join("photo.jpg");
+        std::fs::write(&source_file, b"image data").unwrap();
+        let old_mtime = filetime::FileTime::from_unix_time(1_588_636_800, 0); // 2020-05-05
+        filetime::set_file_mtime(&source_file, old_mtime).unwrap();
+
+        let mut image = Image::new(source_file, target_dir.clone());
+        image.target_filename = "photo".to_string();
+        image.target_filetype = "jpg".to_string();
+
+        image.transfer_to_target(mode, false).expect("transfer failed");
+
+        let meta = std::fs::metadata(target_dir.join("photo.jpg")).unwrap();
+        let mtime = filetime::FileTime::from_last_modification_time(&meta);
+        assert_eq!(
+            mtime.unix_seconds(),
+            old_mtime.unix_seconds(),
+            "modified time was not preserved by transfer_to_target ({mode:?})"
+        );
+    }
 }
 
 // ---- TOCTOU: target path can be claimed between set_target and move_to_target ----
 
 #[test]
-fn move_to_target_does_not_overwrite_file_claimed_after_set_target() {
+fn transfer_to_target_does_not_overwrite_file_claimed_after_set_target() {
     // set_target checks exists() to pick a unique filename, but that check
     // becomes stale the moment the function returns. Another process (or a
     // parallel sort run) can create a file at the chosen path before
@@ -284,7 +444,9 @@ fn move_to_target_does_not_overwrite_file_claimed_after_set_target() {
     image.target_filetype = "jpg".to_string();
 
     let date = NaiveDate::from_ymd_opt(2024, 6, 1).unwrap();
-    let (chosen_dir, chosen_filename) = image.set_target(date).unwrap();
+    let (chosen_dir, chosen_filename) = image
+        .set_target(date, exif_sorter::sorter::config::DEFAULT_PATTERN)
+        .unwrap();
 
     // Simulate another process claiming the path between set_target and move
     let claimed = chosen_dir.join(format!("{chosen_filename}.jpg"));
@@ -293,7 +455,7 @@ fn move_to_target_does_not_overwrite_file_claimed_after_set_target() {
 
     image.target_dir = chosen_dir;
     image.target_filename = chosen_filename;
-    let _ = image.move_to_target(false);
+    let _ = image.transfer_to_target(TransferMode::Move, false);
 
     let content = std::fs::read(&claimed).unwrap();
     assert_eq!(

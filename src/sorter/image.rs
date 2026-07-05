@@ -14,6 +14,7 @@ use tracing::{debug, error, info};
 use crate::error::AppError;
 
 use super::dates::Dates;
+use super::TransferMode;
 
 /// Where a date was extracted from, ordered by trustworthiness.
 /// Recovered files (e.g. PhotoRec output) often carry filesystem timestamps
@@ -25,6 +26,8 @@ pub enum DateSource {
     ExifDateTimeDigitized,
     ExifDateTime,
     ExifGpsDate,
+    VideoCreationTime,
+    Filename,
     FileCreated,
     FileModified,
 }
@@ -36,6 +39,8 @@ impl std::fmt::Display for DateSource {
             DateSource::ExifDateTimeDigitized => "EXIF DateTimeDigitized",
             DateSource::ExifDateTime => "EXIF DateTime",
             DateSource::ExifGpsDate => "EXIF GPSDateStamp",
+            DateSource::VideoCreationTime => "video creation time",
+            DateSource::Filename => "date in filename",
             DateSource::FileCreated => "file creation date",
             DateSource::FileModified => "file modified date",
         };
@@ -188,12 +193,25 @@ impl Image {
         bail!(AppError::NoExifDateFound())
     }
 
-    /// Full fallback chain: EXIF tags first, then filesystem timestamps
-    /// (earliest of creation/modified — on copied or recovered files the
-    /// modified date often predates the creation date).
+    /// Full fallback chain: EXIF tags first, then a date embedded in the
+    /// filename (phone/messenger exports are often EXIF-stripped), then
+    /// filesystem timestamps (earliest of creation/modified — on copied or
+    /// recovered files the modified date often predates the creation date).
     pub fn extract_date(&self) -> anyhow::Result<(NaiveDate, DateSource)> {
         if let Ok(result) = self.read_exif_date() {
             return Ok(result);
+        }
+
+        if super::video::is_video_extension(&self.source_filetype) {
+            if let Some(date) = super::video::creation_date(Path::new(&self.source_full())) {
+                if Self::is_plausible_date(date) {
+                    return Ok((date, DateSource::VideoCreationTime));
+                }
+            }
+        }
+
+        if let Some(date) = super::filename_date::date_from_filename(&self.source_filename) {
+            return Ok((date, DateSource::Filename));
         }
 
         let created = self.dates.file_creation_date.filter(|d| Self::is_plausible_date(*d));
@@ -271,37 +289,34 @@ impl Image {
             .date())
     }
 
+    /// Dated target directory below the base target, laid out by the
+    /// pattern (see `config::render_pattern`; default `{year}/{date}`).
+    pub fn target_dir_for(&self, date: NaiveDate, pattern: &str) -> PathBuf {
+        self.target_dir
+            .join(super::config::render_pattern(pattern, date))
+    }
+
     /// Set target fields based on configuration
-    pub fn set_target(&self, date: NaiveDate) -> anyhow::Result<(PathBuf, String)> {
-        let year_str = date.year().to_string();
-        let date_str = format!("{}/{year_str}/{date}", self.target_dir.to_string_lossy());
-        let target_dir = Path::new(date_str.as_str()).to_path_buf();
+    pub fn set_target(&self, date: NaiveDate, pattern: &str) -> anyhow::Result<(PathBuf, String)> {
+        let target_dir = self.target_dir_for(date, pattern);
 
         let mut filename = self.target_filename.clone();
         let filetype = self.target_filetype.clone();
-        let target_str = format!("{filename}.{filetype}");
-        let mut target_path = target_dir.join(target_str);
+        let mut target_path = target_dir.join(format!("{filename}.{filetype}"));
 
         while target_path.exists() {
-            error!("target_path exists {}", target_path.to_string_lossy());
-            let mut rng = rand::thread_rng();
-
-            let random = rng.gen_range(1..999999);
+            debug!("target exists, adding suffix: {}", target_path.to_string_lossy());
+            let random = rand::thread_rng().gen_range(1..999999);
             filename = format!("{filename}_{random}");
-            let target_str = format!(
-                "{}/{}.{}",
-                date_str.clone(),
-                filename.clone(),
-                filetype.clone()
-            );
-            target_path = Path::new(&target_str.to_owned()).to_path_buf()
+            target_path = target_dir.join(format!("{filename}.{filetype}"));
         }
 
         Ok((target_dir, filename))
     }
 
-    /// Move given files based on its target configuration
-    pub fn move_to_target(self, dry_run: bool) -> anyhow::Result<()> {
+    /// Transfer the file to its target configuration. Copy leaves the source
+    /// untouched (safe default for recovered media); Move removes it.
+    pub fn transfer_to_target(self, mode: TransferMode, dry_run: bool) -> anyhow::Result<()> {
         if !self.target_dir.exists() {
             debug!("Create target dir {}", self.target_dir.to_string_lossy());
 
@@ -310,7 +325,15 @@ impl Image {
             }
         }
 
-        info!("move {} to {}", self.source_full(), self.target_full());
+        info!(
+            "{} {} to {}",
+            match mode {
+                TransferMode::Copy => "copy",
+                TransferMode::Move => "move",
+            },
+            self.source_full(),
+            self.target_full()
+        );
         if !dry_run {
             let source_str = self.source_full();
             let target_str = self.target_full();
@@ -327,12 +350,36 @@ impl Image {
                 .open(target)
                 .map_err(|e| anyhow::anyhow!("Cannot create target {}: {e}", self.target_full()))?;
 
+            // Read source metadata before the transfer; needed to restore the
+            // modified time on the copy path.
+            let source_meta = fs::metadata(source);
+
+            // Fast path for moves: same-filesystem rename is instant and
+            // keeps all timestamps (mtime and, on APFS, birthtime). It
+            // replaces our claim file, which we own. Falls back to copy when
+            // source and target are on different devices.
+            if mode == TransferMode::Move && fs::rename(source, target).is_ok() {
+                return Ok(());
+            }
+
             if let Err(e) = fs::copy(source, target) {
                 let _ = fs::remove_file(target); // remove the empty claim file
                 return Err(e.into());
             }
 
-            fs::remove_file(source)?;
+            // Preserve the modified time: after a sort the file mtime is the
+            // last remaining date signal outside of EXIF (PhotoRec stamps the
+            // capture date into it), don't reset it to now.
+            if let Ok(meta) = source_meta {
+                let mtime = filetime::FileTime::from_last_modification_time(&meta);
+                if let Err(e) = filetime::set_file_mtime(target, mtime) {
+                    debug!("Could not preserve mtime on {}: {e}", self.target_full());
+                }
+            }
+
+            if mode == TransferMode::Move {
+                fs::remove_file(source)?;
+            }
         }
 
         Ok(())
