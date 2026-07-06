@@ -7,3 +7,4 @@ pub mod error;
 mod gui;
 pub mod sorter;
 mod tui;
+pub mod worker;
