@@ -12,7 +12,7 @@
 class ExifSorter < Formula
   desc "Sort images into date-based folders using their EXIF data"
   homepage "https://github.com/thebino/exif-sorter"
-  version "0.2.0"
+  version "1.0.0"
   license "AGPL-3.0-only"
 
   on_macos do
