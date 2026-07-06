@@ -9,7 +9,8 @@ license = "AGPL-3.0-only"
 description = "A simple tool to sort images into sub-directories based on their exif data."
 repository = "https://github.com/thebino/exif-sorter"
 readme = "README.md"
-exclude = ["tests/data/*", "*.png", "*.psd", ".github/*"]
+# reduce crates.io package size but keep assets/icons*.png
+exclude = ["tests/data/*", "/*.png", "/*.psd", ".github/*"]
 
 [dependencies]
 # general
