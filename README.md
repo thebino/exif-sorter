@@ -1,31 +1,48 @@
-# Exif-tool
+# Exif-sorter
 
 [![License](https://img.shields.io/github/license/thebino/exif-sorter?style=for-the-badge)](./LICENSE.md)
 [![GitHub contributors](https://img.shields.io/github/contributors/thebino/exif-sorter?color=success&style=for-the-badge)](https://github.com/thebino/exif-sorter/graphs/contributors)
 ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/thebino/exif-sorter/ci.yaml?style=for-the-badge)
 
+Exif-sorter reads the metadata of photos and videos and sorts them into date-based sub-directories. Built for cleaning up recovered media (e.g. PhotoRec output), where trustworthy dates are scarce and safety matters.
 
-Exif-sorter is a simple tool to read the exif data from images and sort them into sub-directories based on the `DateTimeOriginal` which indicates the date/time when original image was taken.
-If this date is not found, the Files modification and creation date can be used instead.
+**Date sources**, tried in order of trust: EXIF `DateTimeOriginal` → `DateTimeDigitized` → `DateTime` → GPS date stamp → MP4/QuickTime creation time → date embedded in the filename (`IMG_20190412_…`, WhatsApp, Signal, …) → file timestamps (flagged low-confidence).
 
-## Usage
+**Safety by default:**
+- Files are **copied**, not moved — the source stays untouched unless you pass `--move`.
+- Every decision is logged to `{target}/exif-sorter-manifest.csv`; `exif-sorter revert -m <manifest>` undoes a run.
+- Files without a usable date land in `{target}/unsorted/`, unrecognizable (carved) content in `{target}/corrupt/` — nothing is silently misfiled.
+- Existing files are never overwritten; collisions get a suffix, or use `--on-collision dedupe|skip`.
+
+## CLI
+
 ```bash
 exif-sorter -s unsorted_images -t sorted_images cli
+exif-sorter -s src -t dst cli --move --on-collision dedupe --pattern "{year}/{month}"
+exif-sorter revert -m sorted_images/exif-sorter-manifest.csv
 ```
 
+Options can also come from `~/.config/exif-sorter/config.toml` (`pattern`, `move`, `on_collision`); command-line flags win.
 
-> ⚠️⚠️⚠️
-> This application is still in Development.
->
-> TODOs
-> * TUI: trigger search and process
-> * TUI: update progress
-> * CLI: separate search and process into lib
-> * CLI: re-use Image from lib instead of ImageFile in app state
+## TUI
+
+```bash
+exif-sorter -s unsorted_images -t sorted_images tui
+```
+
+Scan → review → confirm: `s` scans (read-only — nothing is written), the review table shows every file with its detected date, the date's origin and the planned target. Toggle files with `Space` (`a` = all/none), switch copy/move with `m`, confirm with `Enter`. Progress and a summary follow.
 
 <img src="tui.png"/>
 
-<img src="cli.png"/>
+## GUI
+
+```bash
+exif-sorter
+```
+
+Same scan → review → confirm flow with directory pickers, a sortable file table, live progress and a summary. Copy is the default; moving must be enabled explicitly.
+
+<img src="gui.png"/>
 
 ## Cross compile via Docker
 Install cross
@@ -38,4 +55,3 @@ Build w/ cross
 ```shell
 CROSS_CONTAINER_OPTS="--platform linux/amd64" cross build --target x86_64-unknown-linux-musl
 ```
-

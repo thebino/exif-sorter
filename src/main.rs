@@ -18,6 +18,7 @@ pub mod error;
 mod gui;
 pub mod sorter;
 mod tui;
+mod worker;
 
 const LOGGING_PATH: &str = "./logs";
 
