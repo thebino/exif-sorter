@@ -14,6 +14,23 @@ Exif-sorter reads the metadata of photos and videos and sorts them into date-bas
 - Files without a usable date land in `{target}/unsorted/`, unrecognizable (carved) content in `{target}/corrupt/` — nothing is silently misfiled.
 - Existing files are never overwritten; collisions get a suffix, or use `--on-collision dedupe|skip`.
 
+See the [changelog](./CHANGELOG.md) for release notes.
+
+## Install
+
+Grab a native installer or portable archive from the [latest release](https://github.com/thebino/exif-sorter/releases/latest):
+
+- **Linux**: `.deb` / `.rpm` (or the `x86_64-musl` tarball for a portable CLI)
+- **macOS**: `.dmg` (Intel and Apple Silicon builds) — currently unsigned, so on first launch right-click the app → **Open**
+- **Windows**: `.msi` — currently unsigned, so click **More info → Run anyway** past the SmartScreen prompt
+
+Or via package managers:
+
+```bash
+cargo install exif-sorter          # from crates.io
+brew install thebino/tap/exif-sorter
+```
+
 ## CLI
 
 ```bash

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=exif-sorter
+Comment=Sort photos and videos into date-based folders
+Exec=exif-sorter
+Icon=exif-sorter
+Terminal=false
+Categories=Utility;Graphics;
